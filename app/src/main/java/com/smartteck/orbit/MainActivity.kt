@@ -31,6 +31,7 @@ import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlinx.coroutines.delay
 
 private val OrbitBg = Color(0xFF071321)
 private val OrbitPanel = Color(0xFF10243A)
@@ -57,6 +58,8 @@ private enum class OrbitPage(val title: String) { HOME("Início"), TASKS("Tarefa
 @Composable
 private fun OrbitApp() {
     val context = LocalContext.current
+    var showSplash by remember { mutableStateOf(true) }
+    LaunchedEffect(Unit) { delay(1800); showSplash = false }
     var page by remember { mutableStateOf(OrbitPage.HOME) }
     var tasks by remember { mutableStateOf(loadTasks(context)) }
     var documents by remember { mutableStateOf(loadDocuments(context)) }
@@ -88,18 +91,19 @@ private fun OrbitApp() {
     }
 
     MaterialTheme(colorScheme = darkColorScheme(primary = OrbitBlue, background = OrbitBg, surface = OrbitPanel, onBackground = OrbitText, onSurface = OrbitText)) {
+        if (showSplash) {
+            OrbitSplashScreen()
+        } else {
         Scaffold(
             containerColor = OrbitBg,
             topBar = {
                 TopAppBar(
                     title = {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(Modifier.size(38.dp).background(OrbitBlue, RoundedCornerShape(12.dp)), contentAlignment = Alignment.Center) {
-                                Icon(Icons.Default.Public, null, tint = Color.White)
-                            }
+                            OrbitLogoMark(38.dp)
                             Spacer(Modifier.width(10.dp))
                             Column {
-                                Text("SMART TECK", fontSize = 10.sp, color = OrbitMuted, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
+                                Text("SMART", fontSize = 10.sp, color = OrbitMuted, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
                                 Text("ORBIT", fontSize = 21.sp, color = OrbitText, fontWeight = FontWeight.ExtraBold, letterSpacing = 2.sp)
                             }
                         }
@@ -141,6 +145,45 @@ private fun OrbitApp() {
         }
         if (showTaskDialog) AddTaskDialog({ showTaskDialog = false }) { title, date -> addTask(title, date); showTaskDialog = false }
         if (showAssistant) AssistantDialog { showAssistant = false }
+        }
+    }
+}
+
+
+@Composable
+private fun OrbitLogoMark(size: androidx.compose.ui.unit.Dp) {
+    Box(Modifier.size(size).background(OrbitBlue, RoundedCornerShape(size * 0.30f)), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(size * 0.68f).border(1.6.dp, OrbitCyan, CircleShape))
+        Icon(Icons.Default.AutoAwesome, null, tint = Color.White, modifier = Modifier.size(size * 0.40f))
+    }
+}
+
+@Composable
+private fun OrbitSplashScreen() {
+    Box(Modifier.fillMaxSize().background(OrbitBg), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(270.dp).background(OrbitBlue.copy(alpha = 0.07f), CircleShape))
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Box(
+                Modifier.size(124.dp).background(
+                    brush = androidx.compose.ui.graphics.Brush.linearGradient(listOf(OrbitBlue, Color(0xFF174B91))),
+                    shape = RoundedCornerShape(36.dp)
+                ),
+                contentAlignment = Alignment.Center
+            ) {
+                Box(Modifier.size(88.dp).border(2.dp, OrbitCyan, CircleShape))
+                Box(Modifier.size(58.dp).border(2.dp, Color.White.copy(alpha = 0.9f), CircleShape))
+                Icon(Icons.Default.AutoAwesome, null, tint = Color.White, modifier = Modifier.size(39.dp))
+                Box(Modifier.size(12.dp).offset(x = 39.dp, y = (-32).dp).background(OrbitCyan, CircleShape))
+            }
+            Spacer(Modifier.height(26.dp))
+            Text("SMART", color = OrbitMuted, fontSize = 13.sp, fontWeight = FontWeight.Bold, letterSpacing = 5.sp)
+            Text("ORBIT", color = OrbitText, fontSize = 36.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 4.sp)
+            Spacer(Modifier.height(10.dp))
+            Text("Sua vida organizada. Seu tempo sob controle.", color = OrbitMuted, fontSize = 12.sp)
+            Spacer(Modifier.height(34.dp))
+            CircularProgressIndicator(Modifier.size(22.dp), color = OrbitCyan, strokeWidth = 2.dp)
+        }
+        Text("SMART TECK", Modifier.align(Alignment.BottomCenter).padding(bottom = 28.dp), color = OrbitMuted.copy(alpha = 0.65f), fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
     }
 }
 
