@@ -1,4 +1,4 @@
-# SMART TECK ORBIT
+# SMART ORBIT
 
 **Sua vida organizada. Seu tempo sob controle.**
 
