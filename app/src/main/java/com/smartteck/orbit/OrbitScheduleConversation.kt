@@ -20,7 +20,8 @@ class OrbitScheduleConversation {
         if (input.isBlank()) return OrbitAssistantReply("Descreva o compromisso.")
 
         val original = pendingCommand
-        val combined = if (original != null && OrbitCommandParser.hasExplicitTime(input)) {
+        val combined = if (original != null && OrbitCommandParser.hasExplicitTime(input) &&
+            !OrbitCommandParser.hasSchedulingIntent(input)) {
             "$original $input"
         } else {
             input
@@ -59,6 +60,8 @@ class OrbitScheduleConversation {
 
 /** Builds a local-device date/time without UTC parsing shifts. */
 fun orbitLocalDateTimeMillis(date: String, time: String): Long? {
+    if (!Regex("^\\d{4}-\\d{2}-\\d{2}$").matches(date) ||
+        !Regex("^\\d{1,2}:\\d{2}$").matches(time)) return null
     val dateParts = date.split("-").mapNotNull { it.toIntOrNull() }
     val timeParts = time.split(":").mapNotNull { it.toIntOrNull() }
     if (dateParts.size != 3 || timeParts.size != 2) return null
