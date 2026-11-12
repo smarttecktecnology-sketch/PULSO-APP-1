@@ -59,6 +59,12 @@ object OrbitCommandParser {
         return schedulingKeywords.any { normalized.contains(it) }
     }
 
+    fun hasExplicitTime(command: String): Boolean {
+        val normalized = normalize(command)
+        return Regex("\\b(?:as?\\s*)?(\\d{1,2})(?::(\\d{2})|h(\\d{2})?|\\s*horas?)\\b")
+            .containsMatchIn(normalized)
+    }
+
     fun parseSchedule(command: String): OrbitScheduleDraft? {
         val normalized = normalize(command)
         if (!hasSchedulingIntent(command)) return null
