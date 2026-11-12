@@ -56,7 +56,7 @@ private val OrbitText = Color(0xFFF4F8FF)
 private val OrbitMuted = Color(0xFF9DB0C7)
 private val OrbitGreen = Color(0xFF45C99A)
 
-data class OrbitTask(val id: Long, val title: String, val dueDate: String, val done: Boolean, val reminderTime: String = "09:00")
+data class OrbitTask(val id: Long, val title: String, val dueDate: String, val done: Boolean, val reminderTime: String = "09:00", val reminderLeadMinutes: Int = 0)
 data class OrbitDocument(val uri: String, val name: String)
 
 class MainActivity : ComponentActivity() {
@@ -125,8 +125,8 @@ private fun OrbitApp() {
         }
     }
 
-    fun addTask(title: String, date: String, time: String) {
-        val task = OrbitTask(System.currentTimeMillis(), title.trim(), date.trim(), false, time.trim())
+    fun addTask(title: String, date: String, time: String, leadMinutes: Int = 0) {
+        val task = OrbitTask(System.currentTimeMillis(), title.trim(), date.trim(), false, time.trim(), leadMinutes.coerceIn(0, 1440))
         tasks = tasks + task
         saveTasks(context, tasks)
         scheduleOrbitReminder(context, task)
@@ -213,7 +213,7 @@ private fun OrbitApp() {
         if (showAssistant) AssistantDialog(
             tasks = tasks,
             onDismiss = { showAssistant = false },
-            onCreateTask = { title -> addTask(title, "", "09:00") }
+            onCreateTask = { title, date, time, lead -> addTask(title, date, time, lead) }
         )
         if (showPremium) OrbitPremiumDialog(
             isPremium = premiumActive,
@@ -424,7 +424,7 @@ private fun TaskRow(task: OrbitTask, onToggle: (OrbitTask) -> Unit, onDelete: ((
             else Icon(Icons.Default.Event, null, tint = OrbitCyan, modifier = Modifier.padding(horizontal = 12.dp))
             Column(Modifier.weight(1f).padding(vertical = 7.dp)) {
                 Text(task.title, color = if (task.done) OrbitMuted else OrbitText, fontWeight = FontWeight.SemiBold)
-                if (task.dueDate.isNotBlank()) Text("Data: ${task.dueDate} • Lembrete: ${task.reminderTime}", color = OrbitMuted, fontSize = 11.sp)
+                if (task.dueDate.isNotBlank()) Text("Data: ${task.dueDate} • ${task.reminderTime}" + if (task.reminderLeadMinutes > 0) " • aviso ${task.reminderLeadMinutes} min antes" else " • aviso no horário", color = OrbitMuted, fontSize = 11.sp)
                 if (overdue) Text("Atrasada — precisa de atenção", color = Color(0xFFFF8A80), fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
             }
             if (onEdit != null) IconButton(onClick = { onEdit(task) }) { Icon(Icons.Default.Edit, "Editar tarefa", tint = OrbitCyan) }
@@ -534,11 +534,12 @@ private fun formatOrbitDateMillis(value: Long): String =
 private fun AssistantDialog(
     tasks: List<OrbitTask>,
     onDismiss: () -> Unit,
-    onCreateTask: (String) -> Unit
+    onCreateTask: (String, String, String, Int) -> Unit
 ) {
     var prompt by remember { mutableStateOf("") }
     var answer by remember { mutableStateOf("Olá! Sou o assistente local do ORBIT. Posso consultar, pesquisar e organizar suas tarefas sem internet.") }
     var proposedTask by remember { mutableStateOf<String?>(null) }
+    var proposedSchedule by remember { mutableStateOf<OrbitScheduleDraft?>(null) }
 
     fun normalize(value: String): String =
         java.text.Normalizer.normalize(value.lowercase(Locale("pt", "BR")), java.text.Normalizer.Form.NFD)
@@ -551,6 +552,14 @@ private fun AssistantDialog(
         val pending = tasks.filter { !it.done }
         val today = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
         proposedTask = null
+        proposedSchedule = null
+        val scheduleDraft = OrbitCommandParser.parseSchedule(question)
+        if (scheduleDraft != null) {
+            proposedSchedule = scheduleDraft
+            answer = "Entendi este agendamento:\n• ${scheduleDraft.title}\n• ${scheduleDraft.date} às ${scheduleDraft.time}\n• " + if (scheduleDraft.reminderLeadMinutes > 0) "lembrete ${scheduleDraft.reminderLeadMinutes} minutos antes" else "lembrete no horário marcado" + ".\nConfirme abaixo para salvar no aparelho."
+            prompt = ""
+            return
+        }
 
         answer = when {
             normalized.startsWith("criar tarefa:") ||
@@ -614,7 +623,7 @@ private fun AssistantDialog(
                 else "Tarefas concluídas:\n" + completed.take(8).joinToString("\n") { "• ${it.title}" }
             }
             normalized.contains("ajuda") || normalized == "oi" || normalized == "ola" ->
-                "Você pode me pedir:\n• resumo das tarefas\n• o que tenho para hoje?\n• mostrar atrasadas\n• priorizar meu dia\n• buscar: estudo\n• criar tarefa: estudar matemática"
+                "Você pode me pedir:\n• resumo das tarefas\n• o que tenho para hoje?\n• mostrar atrasadas\n• priorizar meu dia\n• buscar: estudo\n• criar tarefa: estudar matemática\n• agendar reunião amanhã às 15h\n• agendar academia sexta às 18h\n• agendar prova amanhã às 10h e me lembrar 30 minutos antes"
             else ->
                 "Ainda não reconheço esse pedido. Estou funcionando totalmente no aparelho, sem servidor e sem internet. Toque em Ajuda para ver os comandos disponíveis."
         }
@@ -631,10 +640,22 @@ private fun AssistantDialog(
                     Text("100% LOCAL • OFFLINE", color = OrbitCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp))
                 }
                 Text(answer, color = OrbitText, fontSize = 13.sp)
+                if (proposedSchedule != null) {
+                    Button(
+                        onClick = {
+                            val draft = proposedSchedule ?: return@Button
+                            onCreateTask(draft.title, draft.date, draft.time, draft.reminderLeadMinutes)
+                            proposedSchedule = null
+                            answer = "Agendamento salvo! O lembrete foi programado no celular."
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = OrbitBlue)
+                    ) { Icon(Icons.Default.CalendarMonth, null); Spacer(Modifier.width(6.dp)); Text("Confirmar agendamento") }
+                }
                 if (proposedTask != null) {
                     Button(
                         onClick = {
-                            onCreateTask(proposedTask!!)
+                            onCreateTask(proposedTask!!, "", "09:00", 0)
                             proposedTask = null
                             answer = "Tarefa adicionada. Você pode definir a data e o horário do lembrete na tela Tarefas."
                         },
@@ -720,11 +741,14 @@ private fun scheduleOrbitReminder(context: Context, task: OrbitTask) {
     val today = now.get(Calendar.YEAR) == due.get(Calendar.YEAR) &&
         now.get(Calendar.DAY_OF_YEAR) == due.get(Calendar.DAY_OF_YEAR)
     if (due.before(now)) return
+    due.add(Calendar.MINUTE, -task.reminderLeadMinutes.coerceIn(0, 1440))
+    if (due.before(now)) return
     val request = OneTimeWorkRequestBuilder<OrbitReminderWorker>()
         .setInitialDelay((due.timeInMillis - now.timeInMillis).coerceAtLeast(0L), TimeUnit.MILLISECONDS)
         .setInputData(workDataOf(
             OrbitReminderWorker.KEY_TITLE to task.title,
-            OrbitReminderWorker.KEY_TASK_ID to task.id
+            OrbitReminderWorker.KEY_TASK_ID to task.id,
+            OrbitReminderWorker.KEY_LEAD_MINUTES to task.reminderLeadMinutes
         )).build()
     WorkManager.getInstance(context).enqueueUniqueWork(
         "orbit_task_reminder_${task.id}", ExistingWorkPolicy.REPLACE, request
@@ -738,12 +762,12 @@ private fun loadTasks(context: Context): List<OrbitTask> = try {
     val array = JSONArray(context.getSharedPreferences("orbit_data", Context.MODE_PRIVATE).getString("tasks", "[]"))
     (0 until array.length()).map { i ->
         val o = array.getJSONObject(i)
-        OrbitTask(o.getLong("id"), o.getString("title"), o.optString("date"), o.optBoolean("done"), o.optString("reminderTime", "09:00"))
+        OrbitTask(o.getLong("id"), o.getString("title"), o.optString("date"), o.optBoolean("done"), o.optString("reminderTime", "09:00"), o.optInt("reminderLeadMinutes", 0))
     }
 } catch (_: Exception) { emptyList() }
 private fun saveTasks(context: Context, tasks: List<OrbitTask>) {
     val array = JSONArray()
-    tasks.forEach { array.put(JSONObject().put("id", it.id).put("title", it.title).put("date", it.dueDate).put("done", it.done).put("reminderTime", it.reminderTime)) }
+    tasks.forEach { array.put(JSONObject().put("id", it.id).put("title", it.title).put("date", it.dueDate).put("done", it.done).put("reminderTime", it.reminderTime).put("reminderLeadMinutes", it.reminderLeadMinutes)) }
     context.getSharedPreferences("orbit_data", Context.MODE_PRIVATE).edit().putString("tasks", array.toString()).apply()
 }
 private fun loadDocuments(context: Context): List<OrbitDocument> = try {
