@@ -59,10 +59,12 @@ object OrbitCommandParser {
         return schedulingKeywords.any { normalized.contains(it) }
     }
 
+    private val timeWithUnit = Regex("\\b(?:as?\\s*)?(\\d{1,2})(?::(\\d{2})|h(\\d{2})?|\\s*horas?)\\b")
+    private val hourAfterAs = Regex("\\bas\\s*(\\d{1,2})\\b")
+
     fun hasExplicitTime(command: String): Boolean {
         val normalized = normalize(command)
-        return Regex("\\b(?:as?\\s*)?(\\d{1,2})(?::(\\d{2})|h(\\d{2})?|\\s*horas?)\\b")
-            .containsMatchIn(normalized)
+        return timeWithUnit.containsMatchIn(normalized) || hourAfterAs.containsMatchIn(normalized)
     }
 
     fun parseSchedule(command: String): OrbitScheduleDraft? {
@@ -70,8 +72,7 @@ object OrbitCommandParser {
         if (!hasSchedulingIntent(command)) return null
 
         val date = parseDate(normalized) ?: return null
-        val timeMatch = Regex("\\b(?:as?\\s*)?(\\d{1,2})(?::(\\d{2})|h(\\d{2})?|\\s*horas?)\\b")
-            .find(normalized) ?: return null
+        val timeMatch = timeWithUnit.find(normalized) ?: hourAfterAs.find(normalized) ?: return null
         var hour = (timeMatch.groups[1]?.value ?: "").toIntOrNull() ?: return null
         val minute = (timeMatch.groups[2]?.value ?: timeMatch.groups[3]?.value ?: "0").toIntOrNull() ?: return null
         val timeSuffix = normalized.substring(timeMatch.range.last + 1).trimStart()
