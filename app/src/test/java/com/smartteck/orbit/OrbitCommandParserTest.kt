@@ -100,4 +100,32 @@ class OrbitCommandParserTest {
         assertEquals(true, OrbitCommandParser.hasSchedulingIntent("Amanhã preciso que você me avise às 9h para estudar"))
     }
 
+    @Test
+    fun recognizesManyPortugueseSchedulingSynonyms() {
+        val phrases = listOf(
+            "Adicione estudar amanhã às 18h",
+            "Inclua reunião amanhã às 10h",
+            "Registre consulta amanhã às 09h",
+            "Anote prova amanhã às 08h",
+            "Programe aula amanhã às 14h",
+            "Me alerte sobre a entrega amanhã às 16h",
+            "Tenho compromisso amanhã às 11h"
+        )
+        phrases.forEach { phrase ->
+            assertEquals("Should recognize: $phrase", true,
+                OrbitCommandParser.hasSchedulingIntent(phrase))
+        }
+    }
+
+    @Test
+    fun cleansAccentedDoNotForgetPhrase() {
+        val draft = OrbitCommandParser.parseSchedule(
+            "Não posso esquecer de estudar amanhã às 08:30"
+        )
+        requireNotNull(draft)
+        assertEquals("Estudar", draft.title)
+        assertEquals(dateAfter(1), draft.date)
+        assertEquals("08:30", draft.time)
+    }
+
 }
