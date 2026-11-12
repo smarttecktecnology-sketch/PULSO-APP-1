@@ -575,8 +575,7 @@ private fun AssistantDialog(
             prompt = ""
             return
         }
-        val scheduleIntent = listOf("agende", "agendar", "agenda", "marque", "marcar", "me lembra", "me lembre", "me lembrar", "lembre me", "lembra me", "lembrete")
-            .any { normalized.startsWith(it) }
+        val scheduleIntent = OrbitCommandParser.hasSchedulingIntent(question)
         if (scheduleIntent) {
             answer = "Consigo fazer isso! Informe a data e o horário. Exemplo: “Agende reunião amanhã às 15h e me lembre 30 minutos antes”."
             prompt = ""
