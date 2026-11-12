@@ -138,12 +138,12 @@ private fun OrbitApp() {
         val task = OrbitTask(System.currentTimeMillis(), title.trim(), date.trim(), false, time.trim(), leadMinutes.coerceIn(0, 1440))
         tasks = tasks + task
         saveTasks(context, tasks)
-        scheduleOrbitReminder(context, task, voiceRemindersEnabled)
+        scheduleOrbitReminder(context, task, voiceRemindersEnabled && voiceAvailable)
     }
     fun updateTask(updated: OrbitTask) {
         tasks = tasks.map { if (it.id == updated.id) updated else it }
         saveTasks(context, tasks)
-        if (updated.done) cancelOrbitReminder(context, updated.id) else scheduleOrbitReminder(context, updated, voiceRemindersEnabled)
+        if (updated.done) cancelOrbitReminder(context, updated.id) else scheduleOrbitReminder(context, updated, voiceRemindersEnabled && voiceAvailable)
     }
     fun removeTask(task: OrbitTask) {
         tasks = tasks.filterNot { it.id == task.id }
@@ -154,7 +154,6 @@ private fun OrbitApp() {
     val openAssistant = {
         if (activeTier == OrbitPlanTier.MAX) showAssistant = true
         else {
-            showPremium = true
             page = OrbitPage.PLANS
             Toast.makeText(context, "O assistente de IA é exclusivo do ORBIT MAX.", Toast.LENGTH_LONG).show()
         }
@@ -252,7 +251,7 @@ private fun OrbitApp() {
                 editingTask = null
             }
         }
-        if (showAssistant && premiumActive) EnhancedAssistantDialog(
+        if (showAssistant && activeTier == OrbitPlanTier.MAX) EnhancedAssistantDialog(
             onDismiss = { showAssistant = false },
             onCreateTask = { title, date, time, lead -> addTask(title, date, time, lead) }
         )
