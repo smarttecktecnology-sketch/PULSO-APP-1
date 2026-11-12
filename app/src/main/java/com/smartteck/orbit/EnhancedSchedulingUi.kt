@@ -246,18 +246,5 @@ private fun scheduleFormatDate(value: Long): String =
 private fun scheduleDisplayDate(value: String): String =
     scheduleParseDate(value)?.let { SimpleDateFormat("dd/MM/yyyy", Locale("pt", "BR")).apply { timeZone = TimeZone.getTimeZone("UTC") }.format(Date(it)) } ?: value
 
-private fun scheduleIsFuture(date: String, time: String): Boolean {
-    val dateParts = date.split("-").mapNotNull { it.toIntOrNull() }
-    val timeParts = time.split(":").mapNotNull { it.toIntOrNull() }
-    if (dateParts.size != 3 || timeParts.size != 2) return false
-    return try {
-        val candidate = Calendar.getInstance().apply {
-            isLenient = false
-            set(dateParts[0], dateParts[1] - 1, dateParts[2], timeParts[0], timeParts[1], 0)
-            set(Calendar.MILLISECOND, 0)
-        }
-        candidate.timeInMillis > System.currentTimeMillis()
-    } catch (_: Exception) {
-        false
-    }
-}
+private fun scheduleIsFuture(date: String, time: String): Boolean =
+    orbitLocalDateTimeMillis(date, time)?.let { it > System.currentTimeMillis() } ?: false
