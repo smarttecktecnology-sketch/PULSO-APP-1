@@ -215,7 +215,7 @@ internal fun EnhancedAssistantDialog(
                                     onClick = {
                                         val value = prompt.trim()
                                         if (value.isNotBlank()) {
-                                            title = value
+                                            title = OrbitCommandParser.suggestTitle(value)
                                             draft = null
                                             selectedDate = ""
                                             recurrence = "once"
