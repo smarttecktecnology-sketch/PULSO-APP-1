@@ -133,11 +133,31 @@ private fun OrbitApp() {
         }
     }
 
-    fun addTask(title: String, date: String, time: String, leadMinutes: Int = 0) {
-        val task = OrbitTask(System.currentTimeMillis(), title.trim(), date.trim(), false, time.trim(), leadMinutes.coerceIn(0, 1440))
-        tasks = tasks + task
+    fun addTask(title: String, date: String, time: String, leadMinutes: Int = 0, recurrence: String = "once") {
+        val dates = orbitRecurrenceDates(date.trim(), recurrence)
+        val newTasks = dates.mapIndexedNotNull { index, occurrenceDate ->
+            val conflict = tasks.any { !it.done && it.dueDate == occurrenceDate && it.reminderTime == time.trim() }
+            if (conflict) null else OrbitTask(
+                System.currentTimeMillis() + index,
+                title.trim(),
+                occurrenceDate,
+                false,
+                time.trim(),
+                leadMinutes.coerceIn(0, 1440)
+            )
+        }
+        if (newTasks.isEmpty()) {
+            Toast.makeText(context, "Já existe um compromisso nesse horário.", Toast.LENGTH_LONG).show()
+            return
+        }
+        tasks = tasks + newTasks
         saveTasks(context, tasks)
-        scheduleOrbitReminder(context, task, voiceRemindersEnabled && voiceAvailable)
+        newTasks.forEach { scheduleOrbitReminder(context, it, voiceRemindersEnabled && voiceAvailable) }
+        if (newTasks.size < dates.size) {
+            Toast.makeText(context, "${newTasks.size} ocorrência(s) criada(s); horários conflitantes foram ignorados.", Toast.LENGTH_LONG).show()
+        } else if (recurrence != "once") {
+            Toast.makeText(context, "${newTasks.size} ocorrências recorrentes adicionadas à agenda.", Toast.LENGTH_SHORT).show()
+        }
     }
     fun updateTask(updated: OrbitTask) {
         tasks = tasks.map { if (it.id == updated.id) updated else it }
@@ -251,8 +271,9 @@ private fun OrbitApp() {
             }
         }
         if (showAssistant && effectiveTier == OrbitPlanTier.MAX) EnhancedAssistantDialog(
+            tasks = tasks,
             onDismiss = { showAssistant = false },
-            onCreateTask = { title, date, time, lead -> addTask(title, date, time, lead) }
+            onCreateTask = { title, date, time, lead, recurrence -> addTask(title, date, time, lead, recurrence) }
         )
         }
     }
