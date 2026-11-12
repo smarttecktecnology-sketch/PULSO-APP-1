@@ -66,7 +66,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private enum class OrbitPage(val title: String) { HOME("Início"), TASKS("Tarefas"), AGENDA("Agenda"), FILES("Arquivos") }
+private enum class OrbitPage(val title: String) { HOME("Início"), TASKS("Tarefas"), AGENDA("Agenda"), FILES("Arquivos"), PLANS("Assinaturas"), SETTINGS("Configurações") }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -80,18 +80,26 @@ private fun OrbitApp() {
     var showTaskDialog by remember { mutableStateOf(false) }
     var editingTask by remember { mutableStateOf<OrbitTask?>(null) }
     var showAssistant by remember { mutableStateOf(false) }
-    var showPremium by remember { mutableStateOf(false) }
-    var premiumActive by remember { mutableStateOf(false) }
-    var premiumPrice by remember { mutableStateOf<String?>(null) }
-    var premiumStatus by remember { mutableStateOf("Preparando assinatura do Google Play…") }
-    var premiumProductReady by remember { mutableStateOf(false) }
-    var voiceRemindersEnabled by remember { mutableStateOf(context.getSharedPreferences("orbit_settings", Context.MODE_PRIVATE).getBoolean("voice_reminders", true)) }
+    var activeTier by remember { mutableStateOf(OrbitPlanTier.FREE) }
+    var plusPrice by remember { mutableStateOf<String?>(null) }
+    var maxPrice by remember { mutableStateOf<String?>(null) }
+    var plusReady by remember { mutableStateOf(false) }
+    var maxReady by remember { mutableStateOf(false) }
+    var premiumStatus by remember { mutableStateOf("Preparando planos do Google Play…") }
+    var voiceRemindersEnabled by remember { mutableStateOf(context.getSharedPreferences("orbit_settings", Context.MODE_PRIVATE).getBoolean("voice_reminders", false)) }
+    val voiceAvailable = activeTier == OrbitPlanTier.PLUS || activeTier == OrbitPlanTier.MAX
     val billingManager = remember(context) {
-        OrbitBillingManager(context) { active, status, price, ready ->
-            premiumActive = active
+        OrbitBillingManager(context) { tier, status, plus, max, plusIsReady, maxIsReady ->
+            activeTier = tier
             premiumStatus = status
-            premiumPrice = price
-            premiumProductReady = ready
+            plusPrice = plus
+            maxPrice = max
+            plusReady = plusIsReady
+            maxReady = maxIsReady
+            if (tier == OrbitPlanTier.FREE && voiceRemindersEnabled) {
+                voiceRemindersEnabled = false
+                context.getSharedPreferences("orbit_settings", Context.MODE_PRIVATE).edit().putBoolean("voice_reminders", false).apply()
+            }
         }
     }
     DisposableEffect(billingManager) {
@@ -108,10 +116,10 @@ private fun OrbitApp() {
 
     // Recria os lembretes das tarefas pendentes ao abrir o app.
     // O WorkManager mantém os trabalhos já agendados entre reinicializações.
-    LaunchedEffect(tasks, voiceRemindersEnabled) {
+    LaunchedEffect(tasks, voiceRemindersEnabled, voiceAvailable) {
         tasks.forEach { task ->
             if (task.done) cancelOrbitReminder(context, task.id)
-            else scheduleOrbitReminder(context, task, voiceRemindersEnabled)
+            else scheduleOrbitReminder(context, task, voiceRemindersEnabled && voiceAvailable)
         }
     }
 
@@ -144,10 +152,11 @@ private fun OrbitApp() {
     }
 
     val openAssistant = {
-        if (premiumActive) showAssistant = true
+        if (activeTier == OrbitPlanTier.MAX) showAssistant = true
         else {
             showPremium = true
-            Toast.makeText(context, "O assistente de IA é exclusivo do plano mais caro: ORBIT MAX.", Toast.LENGTH_LONG).show()
+            page = OrbitPage.PLANS
+            Toast.makeText(context, "O assistente de IA é exclusivo do ORBIT MAX.", Toast.LENGTH_LONG).show()
         }
     }
 
@@ -170,26 +179,24 @@ private fun OrbitApp() {
                         }
                     },
                     actions = {
-                        IconButton(onClick = { showPremium = true }) { Icon(Icons.Default.WorkspacePremium, "SMART ORBIT Premium", tint = Color(0xFFFFD166)) }
-                        IconButton(onClick = openAssistant) { Icon(Icons.Default.AutoAwesome, "Assistente ORBIT — ORBIT MAX", tint = if (premiumActive) OrbitCyan else OrbitMuted) }
-                        IconButton(onClick = {
-                            voiceRemindersEnabled = !voiceRemindersEnabled
-                            context.getSharedPreferences("orbit_settings", Context.MODE_PRIVATE).edit().putBoolean("voice_reminders", voiceRemindersEnabled).apply()
-                            Toast.makeText(context, if (voiceRemindersEnabled) "Lembretes falados ativados" else "Lembretes falados desativados", Toast.LENGTH_SHORT).show()
-                        }) { Icon(if (voiceRemindersEnabled) Icons.Default.VolumeUp else Icons.Default.VolumeOff, if (voiceRemindersEnabled) "Desativar avisos falados" else "Ativar avisos falados", tint = if (voiceRemindersEnabled) OrbitCyan else OrbitMuted) }
+                        IconButton(onClick = { page = OrbitPage.SETTINGS }) {
+                            Icon(Icons.Default.Settings, "Configurações", tint = OrbitCyan)
+                        }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = OrbitBg)
                 )
             },
             bottomBar = {
-                NavigationBar(containerColor = OrbitPanel) {
-                    val nav = listOf(OrbitPage.HOME to Icons.Default.Home, OrbitPage.TASKS to Icons.Default.CheckCircle, OrbitPage.AGENDA to Icons.Default.CalendarMonth, OrbitPage.FILES to Icons.Default.FolderOpen)
-                    nav.forEach { (item, icon) ->
-                        NavigationBarItem(
-                            selected = page == item, onClick = { page = item },
-                            icon = { Icon(icon, item.title) }, label = { Text(item.title, fontSize = 10.sp) },
-                            colors = NavigationBarItemDefaults.colors(selectedIconColor = Color.White, selectedTextColor = OrbitCyan, indicatorColor = OrbitBlue.copy(alpha = .35f), unselectedIconColor = OrbitMuted, unselectedTextColor = OrbitMuted)
-                        )
+                if (page !in listOf(OrbitPage.PLANS, OrbitPage.SETTINGS)) {
+                    NavigationBar(containerColor = OrbitPanel) {
+                        val nav = listOf(OrbitPage.HOME to Icons.Default.Home, OrbitPage.TASKS to Icons.Default.CheckCircle, OrbitPage.AGENDA to Icons.Default.CalendarMonth, OrbitPage.FILES to Icons.Default.FolderOpen)
+                        nav.forEach { (item, icon) ->
+                            NavigationBarItem(
+                                selected = page == item, onClick = { page = item },
+                                icon = { Icon(icon, item.title) }, label = { Text(item.title, fontSize = 10.sp) },
+                                colors = NavigationBarItemDefaults.colors(selectedIconColor = Color.White, selectedTextColor = OrbitCyan, indicatorColor = OrbitBlue.copy(alpha = .35f), unselectedIconColor = OrbitMuted, unselectedTextColor = OrbitMuted)
+                            )
+                        }
                     }
                 }
             },
@@ -197,18 +204,39 @@ private fun OrbitApp() {
                 when (page) {
                     OrbitPage.HOME, OrbitPage.TASKS -> FloatingActionButton(onClick = { showTaskDialog = true }, containerColor = OrbitBlue, contentColor = Color.White) { Icon(Icons.Default.Add, "Nova tarefa") }
                     OrbitPage.FILES -> FloatingActionButton(onClick = { documentPicker.launch(arrayOf("*/*")) }, containerColor = OrbitBlue, contentColor = Color.White) { Icon(Icons.Default.UploadFile, "Adicionar arquivo") }
+                    OrbitPage.PLANS, OrbitPage.SETTINGS -> Unit
                     else -> Unit
                 }
             }
         ) { padding ->
             Box(Modifier.fillMaxSize().padding(padding)) {
                 when (page) {
-                    OrbitPage.HOME -> HomeScreen(tasks, documents.size, { page = OrbitPage.TASKS }, { page = OrbitPage.AGENDA }, openAssistant, { updateTask(it.copy(done = !it.done)) })
+                    OrbitPage.HOME -> HomeScreen(tasks, documents.size, { page = OrbitPage.TASKS }, { page = OrbitPage.AGENDA }, openAssistant, { page = OrbitPage.PLANS }, { updateTask(it.copy(done = !it.done)) })
                     OrbitPage.TASKS -> TasksScreen(tasks, { updateTask(it.copy(done = !it.done)) }, { removeTask(it) }, { editingTask = it })
                     OrbitPage.AGENDA -> AgendaScreen(tasks)
                     OrbitPage.FILES -> FilesScreen(documents, { documentPicker.launch(arrayOf("*/*")) }, {
                         documents = documents.filterNot { doc -> doc.uri == it.uri }; saveDocuments(context, documents)
                     })
+                    OrbitPage.PLANS -> OrbitPlansScreen(
+                        activeTier, plusPrice, maxPrice, plusReady, maxReady, premiumStatus,
+                        onSubscribe = { tier ->
+                            val activity = context as? Activity
+                            if (activity != null) billingManager.launchPurchase(activity, tier)
+                            else Toast.makeText(context, "Não foi possível abrir o Google Play.", Toast.LENGTH_SHORT).show()
+                        },
+                        onBack = { page = OrbitPage.HOME }
+                    )
+                    OrbitPage.SETTINGS -> OrbitSettingsScreen(
+                        activeTier, voiceRemindersEnabled,
+                        onVoiceChanged = { enabled ->
+                            if (voiceAvailable) {
+                                voiceRemindersEnabled = enabled
+                                context.getSharedPreferences("orbit_settings", Context.MODE_PRIVATE).edit().putBoolean("voice_reminders", enabled).apply()
+                                Toast.makeText(context, if (enabled) "Lembretes por voz ativados" else "Lembretes por voz desativados", Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        onBack = { page = OrbitPage.HOME }
+                    )
                 }
             }
         }
@@ -227,19 +255,6 @@ private fun OrbitApp() {
         if (showAssistant && premiumActive) EnhancedAssistantDialog(
             onDismiss = { showAssistant = false },
             onCreateTask = { title, date, time, lead -> addTask(title, date, time, lead) }
-        )
-        if (showPremium) OrbitPremiumDialog(
-            isPremium = premiumActive,
-            price = premiumPrice,
-            status = premiumStatus,
-            productReady = premiumProductReady,
-            onRefresh = { billingManager.refreshPurchases() },
-            onPurchase = {
-                val activity = context as? Activity
-                if (activity != null) billingManager.launchPurchase(activity)
-                else premiumStatus = "Não foi possível abrir a compra nesta tela."
-            },
-            onDismiss = { showPremium = false }
         )
         }
     }
@@ -284,12 +299,19 @@ private fun OrbitSplashScreen() {
 }
 
 @Composable
-private fun HomeScreen(tasks: List<OrbitTask>, documentCount: Int, onTasks: () -> Unit, onAgenda: () -> Unit, onAssistant: () -> Unit, onToggle: (OrbitTask) -> Unit) {
+private fun HomeScreen(tasks: List<OrbitTask>, documentCount: Int, onTasks: () -> Unit, onAgenda: () -> Unit, onAssistant: () -> Unit, onPlans: () -> Unit, onToggle: (OrbitTask) -> Unit) {
     val pending = tasks.count { !it.done }
     val completed = tasks.count { it.done }
     val today = SimpleDateFormat("EEEE, d 'de' MMMM", Locale("pt", "BR")).format(Date())
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
         item {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Button(onClick = onPlans, colors = ButtonDefaults.buttonColors(containerColor = OrbitBlue), shape = RoundedCornerShape(12.dp)) {
+                    Icon(Icons.Default.WorkspacePremium, null, modifier = Modifier.size(17.dp))
+                    Spacer(Modifier.width(7.dp))
+                    Text("Assinaturas")
+                }
+            }
             Text(today.replaceFirstChar { it.uppercase() }, color = OrbitMuted, fontSize = 12.sp)
             Spacer(Modifier.height(5.dp))
             Text("Seu mundo, em ordem.", color = OrbitText, fontSize = 27.sp, fontWeight = FontWeight.Bold)
