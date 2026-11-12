@@ -75,6 +75,7 @@ private fun OrbitApp() {
     var tasks by remember { mutableStateOf(loadTasks(context)) }
     var documents by remember { mutableStateOf(loadDocuments(context)) }
     var showTaskDialog by remember { mutableStateOf(false) }
+    var editingTask by remember { mutableStateOf<OrbitTask?>(null) }
     var showAssistant by remember { mutableStateOf(false) }
     val notificationPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
     LaunchedEffect(Unit) {
@@ -166,7 +167,7 @@ private fun OrbitApp() {
             Box(Modifier.fillMaxSize().padding(padding)) {
                 when (page) {
                     OrbitPage.HOME -> HomeScreen(tasks, documents.size, { page = OrbitPage.TASKS }, { page = OrbitPage.AGENDA }, { showAssistant = true }, { updateTask(it.copy(done = !it.done)) })
-                    OrbitPage.TASKS -> TasksScreen(tasks, { updateTask(it.copy(done = !it.done)) }, { removeTask(it) })
+                    OrbitPage.TASKS -> TasksScreen(tasks, { updateTask(it.copy(done = !it.done)) }, { removeTask(it) }, { editingTask = it })
                     OrbitPage.AGENDA -> AgendaScreen(tasks)
                     OrbitPage.FILES -> FilesScreen(documents, { documentPicker.launch(arrayOf("*/*")) }, {
                         documents = documents.filterNot { doc -> doc.uri == it.uri }; saveDocuments(context, documents)
@@ -174,7 +175,18 @@ private fun OrbitApp() {
                 }
             }
         }
-        if (showTaskDialog) AddTaskDialog({ showTaskDialog = false }) { title, date, time -> addTask(title, date, time); showTaskDialog = false }
+        if (showTaskDialog || editingTask != null) {
+            val taskBeingEdited = editingTask
+            AddTaskDialog(
+                onDismiss = { showTaskDialog = false; editingTask = null },
+                initialTask = taskBeingEdited
+            ) { title, date, time ->
+                if (taskBeingEdited == null) addTask(title, date, time)
+                else updateTask(taskBeingEdited.copy(title = title.trim(), dueDate = date.trim(), reminderTime = time))
+                showTaskDialog = false
+                editingTask = null
+            }
+        }
         if (showAssistant) AssistantDialog { showAssistant = false }
         }
     }
@@ -276,16 +288,16 @@ private fun HomeScreen(tasks: List<OrbitTask>, documentCount: Int, onTasks: () -
 }
 
 @Composable
-private fun TasksScreen(tasks: List<OrbitTask>, onToggle: (OrbitTask) -> Unit, onDelete: (OrbitTask) -> Unit) {
+private fun TasksScreen(tasks: List<OrbitTask>, onToggle: (OrbitTask) -> Unit, onDelete: (OrbitTask) -> Unit, onEdit: (OrbitTask) -> Unit) {
     val pending = tasks.filter { !it.done }; val done = tasks.filter { it.done }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item { Text("Minhas tarefas", color = OrbitText, fontSize = 27.sp, fontWeight = FontWeight.Bold); Text("Acompanhe cada passo e marque o que concluir.", color = OrbitMuted, fontSize = 13.sp) }
         item { SectionHeader("Pendentes", "${pending.size} para fazer") }
         if (pending.isEmpty()) item { EmptyState("Nenhuma pendência", "Você está em dia. Se surgir algo, adicione uma tarefa.", Icons.Default.ThumbUp) }
-        items(pending, key = { it.id }) { TaskRow(it, onToggle, onDelete) }
+        items(pending, key = { it.id }) { TaskRow(it, onToggle, onDelete, onEdit = onEdit) }
         if (done.isNotEmpty()) {
             item { Spacer(Modifier.height(5.dp)); SectionHeader("Concluídas", "${done.size} finalizadas") }
-            items(done, key = { it.id }) { TaskRow(it, onToggle, onDelete) }
+            items(done, key = { it.id }) { TaskRow(it, onToggle, onDelete, onEdit = onEdit) }
         }
     }
 }
@@ -340,7 +352,7 @@ private fun FilesScreen(documents: List<OrbitDocument>, onAdd: () -> Unit, onDel
 }
 
 @Composable
-private fun TaskRow(task: OrbitTask, onToggle: (OrbitTask) -> Unit, onDelete: ((OrbitTask) -> Unit)?, showToggle: Boolean = true) {
+private fun TaskRow(task: OrbitTask, onToggle: (OrbitTask) -> Unit, onDelete: ((OrbitTask) -> Unit)?, showToggle: Boolean = true, onEdit: ((OrbitTask) -> Unit)? = null) {
     Card(colors = CardDefaults.cardColors(containerColor = OrbitPanel), shape = RoundedCornerShape(16.dp)) {
         Row(Modifier.fillMaxWidth().padding(start = 12.dp, end = 6.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             if (showToggle) Checkbox(task.done, { onToggle(task) }, colors = CheckboxDefaults.colors(checkedColor = OrbitGreen, uncheckedColor = OrbitMuted))
@@ -349,34 +361,50 @@ private fun TaskRow(task: OrbitTask, onToggle: (OrbitTask) -> Unit, onDelete: ((
                 Text(task.title, color = if (task.done) OrbitMuted else OrbitText, fontWeight = FontWeight.SemiBold)
                 if (task.dueDate.isNotBlank()) Text("Data: ${task.dueDate}", color = OrbitMuted, fontSize = 11.sp)
             }
+            if (onEdit != null) IconButton(onClick = { onEdit(task) }) { Icon(Icons.Default.Edit, "Editar tarefa", tint = OrbitCyan) }
             if (onDelete != null) IconButton(onClick = { onDelete(task) }) { Icon(Icons.Default.DeleteOutline, "Excluir tarefa", tint = OrbitMuted) }
         }
     }
 }
 
 @Composable
-private fun AddTaskDialog(onDismiss: () -> Unit, onSave: (String, String, String) -> Unit) {
-    var title by remember { mutableStateOf("") }
-    var date by remember { mutableStateOf("") }
-    var time by remember { mutableStateOf("09:00") }
+private fun AddTaskDialog(
+    onDismiss: () -> Unit,
+    initialTask: OrbitTask? = null,
+    onSave: (String, String, String) -> Unit
+) {
+    var title by remember(initialTask?.id) { mutableStateOf(initialTask?.title.orEmpty()) }
+    var date by remember(initialTask?.id) { mutableStateOf(initialTask?.dueDate.orEmpty()) }
+    var time by remember(initialTask?.id) { mutableStateOf(initialTask?.reminderTime ?: "09:00") }
+    var showDatePicker by remember { mutableStateOf(false) }
+    var showTimePicker by remember { mutableStateOf(false) }
     val validTime = Regex("^([01]?[0-9]|2[0-3]):[0-5][0-9]$").matches(time.trim())
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Nova tarefa", fontWeight = FontWeight.Bold) },
+        title = { Text(if (initialTask == null) "Nova tarefa" else "Editar tarefa", fontWeight = FontWeight.Bold) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 OutlinedTextField(title, { title = it }, label = { Text("O que precisa fazer?") }, singleLine = true)
-                OutlinedTextField(date, { date = it }, label = { Text("Data: AAAA-MM-DD") }, singleLine = true)
+                OutlinedTextField(
+                    value = if (date.isBlank()) "" else date,
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text("Data da tarefa") },
+                    placeholder = { Text("Selecionar data") },
+                    trailingIcon = { IconButton(onClick = { showDatePicker = true }) { Icon(Icons.Default.CalendarMonth, "Selecionar data") } },
+                    modifier = Modifier.fillMaxWidth()
+                )
                 OutlinedTextField(
                     value = time,
                     onValueChange = { time = it },
-                    label = { Text("Hora do lembrete (HH:mm)") },
+                    label = { Text("Hora do lembrete (24 horas)") },
                     placeholder = { Text("09:00") },
                     singleLine = true,
-                    isError = !validTime
+                    isError = !validTime,
+                    trailingIcon = { IconButton(onClick = { showTimePicker = true }) { Icon(Icons.Default.Schedule, "Selecionar horário") } }
                 )
-                Text("Escolha a hora em que deseja receber o aviso. Exemplo: 08:30.", color = OrbitMuted, fontSize = 11.sp)
-                if (date.isBlank()) Text("Informe uma data para ativar o lembrete.", color = OrbitMuted, fontSize = 11.sp)
+                Text("O lembrete será programado para a data e hora escolhidas. O Android pode atrasar avisos por economia de bateria.", color = OrbitMuted, fontSize = 11.sp)
+                if (date.isBlank()) Text("Selecione uma data para ativar o lembrete.", color = OrbitMuted, fontSize = 11.sp)
             }
         },
         confirmButton = {
@@ -385,7 +413,55 @@ private fun AddTaskDialog(onDismiss: () -> Unit, onSave: (String, String, String
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } },
         containerColor = OrbitPanel, titleContentColor = OrbitText, textContentColor = OrbitText
     )
+    if (showDatePicker) {
+        val dateState = rememberDatePickerState(initialSelectedDateMillis = parseOrbitDateMillis(date))
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    dateState.selectedDateMillis?.let { date = formatOrbitDateMillis(it) }
+                    showDatePicker = false
+                }) { Text("Confirmar") }
+            },
+            dismissButton = { TextButton(onClick = { showDatePicker = false }) { Text("Cancelar") } }
+        ) { DatePicker(state = dateState, showModeToggle = false) }
+    }
+    if (showTimePicker) {
+        val parts = time.split(":")
+        val hour = parts.getOrNull(0)?.toIntOrNull()?.coerceIn(0, 23) ?: 9
+        val minute = parts.getOrNull(1)?.toIntOrNull()?.coerceIn(0, 59) ?: 0
+        val timeState = rememberTimePickerState(initialHour = hour, initialMinute = minute, is24Hour = true)
+        AlertDialog(
+            onDismissRequest = { showTimePicker = false },
+            title = { Text("Horário do lembrete") },
+            text = { TimePicker(state = timeState) },
+            confirmButton = {
+                TextButton(onClick = {
+                    time = "%02d:%02d".format(Locale.US, timeState.hour, timeState.minute)
+                    showTimePicker = false
+                }) { Text("Confirmar") }
+            },
+            dismissButton = { TextButton(onClick = { showTimePicker = false }) { Text("Cancelar") } },
+            containerColor = OrbitPanel, titleContentColor = OrbitText, textContentColor = OrbitText
+        )
+    }
 }
+
+private fun parseOrbitDateMillis(value: String): Long? {
+    if (value.isBlank()) return null
+    val formatter = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply {
+        isLenient = false
+        timeZone = java.util.TimeZone.getTimeZone("UTC")
+    }
+    val position = java.text.ParsePosition(0)
+    val parsed = formatter.parse(value, position)
+    return if (parsed != null && position.index == value.length) parsed.time else null
+}
+
+private fun formatOrbitDateMillis(value: Long): String =
+    SimpleDateFormat("yyyy-MM-dd", Locale.US).apply {
+        timeZone = java.util.TimeZone.getTimeZone("UTC")
+    }.format(Date(value))
 
 @Composable
 private fun AssistantDialog(onDismiss: () -> Unit) {
