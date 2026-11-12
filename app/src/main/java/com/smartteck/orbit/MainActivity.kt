@@ -189,7 +189,11 @@ private fun OrbitApp() {
                 editingTask = null
             }
         }
-        if (showAssistant) AssistantDialog { showAssistant = false }
+        if (showAssistant) AssistantDialog(
+            tasks = tasks,
+            onDismiss = { showAssistant = false },
+            onCreateTask = { title -> addTask(title, "", "09:00") }
+        )
         }
     }
 }
@@ -493,23 +497,79 @@ private fun formatOrbitDateMillis(value: Long): String =
     }.format(Date(value))
 
 @Composable
-private fun AssistantDialog(onDismiss: () -> Unit) {
+private fun AssistantDialog(
+    tasks: List<OrbitTask>,
+    onDismiss: () -> Unit,
+    onCreateTask: (String) -> Unit
+) {
+    var prompt by remember { mutableStateOf("") }
+    var answer by remember { mutableStateOf("Olá! Posso consultar suas tarefas e ajudar a organizar sua rotina. Experimente perguntar: “Quantas tarefas estão pendentes?”") }
+    var proposedTask by remember { mutableStateOf<String?>(null) }
+
+    fun processPrompt() {
+        val question = prompt.trim()
+        if (question.isBlank()) return
+        val normalized = question.lowercase(Locale("pt", "BR"))
+        proposedTask = null
+        answer = when {
+            normalized.contains("quantas") || normalized.contains("pendentes") || normalized.contains("resumo") -> {
+                val pending = tasks.count { !it.done }
+                val completed = tasks.count { it.done }
+                "Seu resumo: $pending tarefa(s) pendente(s) e $completed concluída(s). Você tem ${tasks.size} tarefa(s) cadastrada(s) no total."
+            }
+            normalized.contains("priorizar") || normalized.contains("organizar") || normalized.contains("meu dia") -> {
+                val next = tasks.filter { !it.done }.sortedWith(compareBy<OrbitTask>({ if (it.dueDate.isBlank()) "9999-99-99" else it.dueDate }, { it.reminderTime })).take(3)
+                if (next.isEmpty()) "Não há tarefas pendentes. Seu painel está livre no momento."
+                else "Sugestão de foco: comece por estas tarefas, considerando as datas cadastradas:\n" + next.mapIndexed { index, task -> "${index + 1}. ${task.title}" }.joinToString("\n")
+            }
+            normalized.startsWith("criar tarefa:") || normalized.startsWith("adicionar tarefa:") || normalized.startsWith("nova tarefa:") -> {
+                val title = question.substringAfter(':').trim()
+                if (title.isBlank()) "Escreva o nome da tarefa depois dos dois-pontos."
+                else {
+                    proposedTask = title
+                    "Preparei a tarefa “$title”. Revise e toque em Adicionar tarefa para salvá-la."
+                }
+            }
+            normalized.contains("ajuda") -> "Posso mostrar seu resumo, sugerir uma ordem para as tarefas ou preparar uma nova tarefa. Para preparar uma tarefa, escreva: criar tarefa: nome da tarefa."
+            else -> "No modo local, consigo consultar suas tarefas, sugerir prioridades e preparar novas tarefas. A conexão com um modelo de IA generativa ainda precisa de um serviço seguro no servidor."
+        }
+        prompt = ""
+    }
+
     AlertDialog(
         onDismissRequest = onDismiss,
         icon = { Icon(Icons.Default.AutoAwesome, null, tint = OrbitCyan, modifier = Modifier.size(34.dp)) },
         title = { Text("Assistente ORBIT", fontWeight = FontWeight.Bold) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
-                Text("Sua central inteligente de organização.", color = OrbitText)
-                Text("A próxima etapa conectará a inteligência artificial para analisar mensagens e documentos, identificar datas e sugerir tarefas.", color = OrbitMuted, fontSize = 13.sp)
-                Surface(color = OrbitBlue.copy(alpha = .16f), shape = RoundedCornerShape(12.dp)) {
-                    Text("Por segurança, qualquer tarefa ou ação sugerida deverá ser revisada e aprovada por você.", color = OrbitCyan, fontSize = 12.sp, modifier = Modifier.padding(12.dp))
+            Column(verticalArrangement = Arrangement.spacedBy(11.dp)) {
+                Surface(color = OrbitBlue.copy(alpha = .13f), shape = RoundedCornerShape(12.dp)) {
+                    Text("MODO LOCAL • BETA", color = OrbitCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp))
                 }
-                Text("A análise automática ainda não está conectada nesta versão.", color = OrbitMuted, fontSize = 11.sp)
+                Text(answer, color = OrbitText, fontSize = 13.sp)
+                if (proposedTask != null) {
+                    Button(
+                        onClick = { onCreateTask(proposedTask!!); proposedTask = null; answer = "Tarefa adicionada à sua lista. Você pode definir a data e o lembrete na tela Tarefas." },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = OrbitBlue)
+                    ) { Icon(Icons.Default.Add, null); Spacer(Modifier.width(6.dp)); Text("Adicionar tarefa") }
+                }
+                OutlinedTextField(
+                    value = prompt,
+                    onValueChange = { prompt = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("Pergunte ao ORBIT") },
+                    placeholder = { Text("Ex.: Quantas tarefas estão pendentes?") },
+                    minLines = 2,
+                    maxLines = 4
+                )
+                Button(onClick = { processPrompt() }, enabled = prompt.isNotBlank(), modifier = Modifier.fillMaxWidth()) {
+                    Icon(Icons.Default.Send, null); Spacer(Modifier.width(7.dp)); Text("Enviar")
+                }
+                Text("Ações que alteram seus dados só acontecem após sua confirmação. A IA generativa online ainda não está conectada.", color = OrbitMuted, fontSize = 10.sp)
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Entendi") } },
-        containerColor = OrbitPanel, titleContentColor = OrbitText
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Fechar") } },
+        containerColor = OrbitPanel, titleContentColor = OrbitText, textContentColor = OrbitText
     )
 }
 
