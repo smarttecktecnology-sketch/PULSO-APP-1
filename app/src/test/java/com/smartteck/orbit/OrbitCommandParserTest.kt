@@ -128,4 +128,36 @@ class OrbitCommandParserTest {
         assertEquals("08:30", draft.time)
     }
 
+
+    @Test
+    fun requiresExplicitTimeEvenWhenDateAndIntentExist() {
+        assertNull(OrbitCommandParser.parseSchedule("Me lembre de estudar amanhã"))
+    }
+
+    @Test
+    fun parsesAppointmentWithExplicitClockTimeAndLeadMinutes() {
+        val draft = OrbitCommandParser.parseSchedule(
+            "Tenho compromisso amanhã às 16:45 com aviso 20 minutos antes"
+        )
+        requireNotNull(draft)
+        assertEquals("Compromisso", draft.title)
+        assertEquals("16:45", draft.time)
+        assertEquals(20, draft.reminderLeadMinutes)
+    }
+
+    @Test
+    fun removesDifferentCommandPrefixesFromAppointmentTitle() {
+        val phrases = listOf(
+            "Adicione estudar amanhã às 18h" to "Estudar",
+            "Inclua reunião amanhã às 10h" to "Reunião",
+            "Anote prova amanhã às 08h" to "Prova",
+            "Programe aula amanhã às 14h" to "Aula"
+        )
+        phrases.forEach { (phrase, expectedTitle) ->
+            val draft = OrbitCommandParser.parseSchedule(phrase)
+            requireNotNull(draft)
+            assertEquals(expectedTitle, draft.title)
+        }
+    }
+
 }
