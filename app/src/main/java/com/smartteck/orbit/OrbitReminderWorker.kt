@@ -43,9 +43,13 @@ class OrbitReminderWorker(context: Context, params: WorkerParameters) : Worker(c
                 .setContentTitle("Lembrete SMART ORBIT")
                 .setContentText(title)
                 .setStyle(NotificationCompat.BigTextStyle().bigText(
-                    if (inputData.getInt(KEY_LEAD_MINUTES, 0) > 0)
-                        "Faltam ${inputData.getInt(KEY_LEAD_MINUTES, 0)} minutos para: $title"
-                    else "Está na hora de: $title"
+                    when {
+                        inputData.getBoolean(KEY_LEAD_ALREADY_PASSED, false) ->
+                            "O horário do aviso antecipado já passou. Seu compromisso está próximo: $title"
+                        inputData.getInt(KEY_LEAD_MINUTES, 0) > 0 ->
+                            "Faltam ${inputData.getInt(KEY_LEAD_MINUTES, 0)} minutos para: $title"
+                        else -> "Está na hora de: $title"
+                    }
                 ))
                 .setPriority(NotificationCompat.PRIORITY_DEFAULT)
                 .setAutoCancel(true)
@@ -61,8 +65,12 @@ class OrbitReminderWorker(context: Context, params: WorkerParameters) : Worker(c
         if (isVoiceReminderAllowed()) {
             val leadMinutes = inputData.getInt(KEY_LEAD_MINUTES, 0)
             speakReminder(
-                if (leadMinutes > 0) "Atenção! $title começa daqui a $leadMinutes minutos."
-                else "Atenção! Está na hora de $title."
+                when {
+                    inputData.getBoolean(KEY_LEAD_ALREADY_PASSED, false) ->
+                        "Atenção! O aviso antecipado de $title já passou. Seu compromisso está próximo."
+                    leadMinutes > 0 -> "Atenção! $title começa daqui a $leadMinutes minutos."
+                    else -> "Atenção! Está na hora de $title."
+                }
             )
         }
         return Result.success()
@@ -126,6 +134,7 @@ class OrbitReminderWorker(context: Context, params: WorkerParameters) : Worker(c
         const val KEY_TASK_ID = "task_id"
         const val KEY_LEAD_MINUTES = "lead_minutes"
         const val KEY_VOICE_ENABLED = "voice_enabled"
+        const val KEY_LEAD_ALREADY_PASSED = "lead_already_passed"
     }
 }
 
