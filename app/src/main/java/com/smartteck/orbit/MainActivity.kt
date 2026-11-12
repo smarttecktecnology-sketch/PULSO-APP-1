@@ -761,11 +761,11 @@ private fun scheduleOrbitReminder(context: Context, task: OrbitTask) {
     if (due.before(now)) return
     val request = OneTimeWorkRequestBuilder<OrbitReminderWorker>()
         .setInitialDelay((due.timeInMillis - now.timeInMillis).coerceAtLeast(0L), TimeUnit.MILLISECONDS)
-        .setInputData(workDataOf(
-            OrbitReminderWorker.KEY_TITLE to task.title,
-            OrbitReminderWorker.KEY_TASK_ID to task.id,
-            OrbitReminderWorker.KEY_LEAD_MINUTES to task.reminderLeadMinutes
-        )).build()
+        .setInputData(androidx.work.Data.Builder()
+            .putString(OrbitReminderWorker.KEY_TITLE, task.title)
+            .putLong(OrbitReminderWorker.KEY_TASK_ID, task.id)
+            .putInt(OrbitReminderWorker.KEY_LEAD_MINUTES, task.reminderLeadMinutes)
+            .build()).build()
     WorkManager.getInstance(context).enqueueUniqueWork(
         "orbit_task_reminder_${task.id}", ExistingWorkPolicy.REPLACE, request
     )
