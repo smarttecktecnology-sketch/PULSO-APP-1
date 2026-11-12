@@ -50,4 +50,33 @@ class OrbitTaskTimeTest {
     fun displaysDateInBrazilianFormat() {
         assertEquals("12/11/2026", OrbitTaskTime.displayDate("2026-11-12"))
     }
+
+    @Test
+    fun expandsDailyAndWeeklyRecurringDates() {
+        assertEquals(
+            listOf("2026-11-12", "2026-11-13", "2026-11-14"),
+            orbitRecurrenceDates("2026-11-12", "daily", 3)
+        )
+        assertEquals(
+            listOf("2026-11-12", "2026-11-19", "2026-11-26"),
+            orbitRecurrenceDates("2026-11-12", "weekly", 3)
+        )
+    }
+
+    @Test
+    fun monthlyRecurrenceClampsToLastDayOfShorterMonth() {
+        assertEquals(
+            listOf("2026-01-31", "2026-02-28", "2026-03-31"),
+            orbitRecurrenceDates("2026-01-31", "monthly", 3)
+        )
+    }
+
+    @Test
+    fun nonRecurringScheduleCreatesOnlyOneDate() {
+        assertEquals(
+            listOf("2026-11-12"),
+            orbitRecurrenceDates("2026-11-12", "once", 12)
+        )
+    }
+
 }
