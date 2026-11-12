@@ -54,4 +54,28 @@ class OrbitCommandParserTest {
     fun rejectsInvalidTime() {
         assertNull(OrbitCommandParser.parseSchedule("Agende consulta amanhã às 25h"))
     }
+    @Test
+    fun parsesInformalReminderAndCleansTitle() {
+        val draft = OrbitCommandParser.parseSchedule("Me lembra de estudar amanhã às 19h")
+        requireNotNull(draft)
+        assertEquals("Estudar", draft.title)
+        assertEquals(dateAfter(1), draft.date)
+        assertEquals("19:00", draft.time)
+        assertEquals(0, draft.reminderLeadMinutes)
+    }
+
+    @Test
+    fun parsesOneHourReminderLead() {
+        val draft = OrbitCommandParser.parseSchedule("Agende consulta amanhã às 10h e me avise 1 hora antes")
+        requireNotNull(draft)
+        assertEquals("Consulta", draft.title)
+        assertEquals(60, draft.reminderLeadMinutes)
+    }
+
+    @Test
+    fun requiresDateAndTimeToCreateSchedule() {
+        assertNull(OrbitCommandParser.parseSchedule("Agende estudar"))
+        assertNull(OrbitCommandParser.parseSchedule("Agende estudar amanhã"))
+    }
+
 }
