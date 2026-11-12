@@ -367,6 +367,7 @@ private fun TaskRow(task: OrbitTask, onToggle: (OrbitTask) -> Unit, onDelete: ((
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun AddTaskDialog(
     onDismiss: () -> Unit,
