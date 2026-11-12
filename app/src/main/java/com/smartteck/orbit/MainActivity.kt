@@ -91,6 +91,8 @@ private fun OrbitApp() {
     val billingManager = remember(context) {
         OrbitBillingManager(context) { tier, status, plus, max, plusIsReady, maxIsReady ->
             activeTier = tier
+            context.getSharedPreferences("orbit_settings", Context.MODE_PRIVATE)
+                .edit().putString("active_plan", tier.name).apply()
             premiumStatus = status
             plusPrice = plus
             maxPrice = max
