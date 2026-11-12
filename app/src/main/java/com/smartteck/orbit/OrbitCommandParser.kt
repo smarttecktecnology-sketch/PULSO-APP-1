@@ -82,7 +82,7 @@ object OrbitCommandParser {
             ""
         )
         title = title.replace(
-            Regex("(?i)^\\s*(tenho compromisso|tenho uma consulta|tenho consulta|tenho uma reuniao|tenho reuniao|tenho uma prova|tenho prova|tenho uma aula|tenho aula|tenho um evento|tenho evento|me avise|me avisar|avise|avisar|me notifique|notifique|me alerte|alerta|me informe|me recorde|me lembre|me lembrar|me lembra(r)?|lembre\\s*me|lembra\\s*me|lembrete|preciso\\s+lembrar|quero\\s+lembrar|nao\\s+posso\\s+esquecer|nao\\s+esquecer|nao\\s+deixe\\s+eu\\s+esquecer)\\s+(de\\s+)?"),
+            Regex("(?i)^\\s*(tenho compromisso|tenho uma consulta|tenho consulta|tenho uma reuniao|tenho reuniao|tenho uma prova|tenho prova|tenho uma aula|tenho aula|tenho um evento|tenho evento|me avise|me avisar|avise|avisar|me notifique|notifique|me alerte|alerta|me informe|me recorde|me lembre|me lembrar|me lembra(r)?|lembre\\s*me|lembra\\s*me|lembrete|preciso\\s+lembrar|quero\\s+lembrar|nao\\s+posso\\s+esquecer|não\\s+posso\\s+esquecer|nao\\s+esquecer|não\\s+esquecer|nao\\s+deixe\\s+eu\\s+esquecer|não\\s+deixe\\s+eu\\s+esquecer)\\s+(de\\s+)?"),
             ""
         )
         title = title.replace(Regex("(?i)\\bdepois\\s+de\\s+amanh[ãa]\\b"), "")
