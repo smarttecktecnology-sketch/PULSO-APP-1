@@ -82,18 +82,16 @@ fun OrbitPlansScreen(
             PlanCard(
                 name = "ORBIT PLUS", price = plusPrice ?: "R$ 10,00 / mês", description = "Mais recursos para sua rotina.",
                 features = listOf("Todos os recursos do FREE", "Lembretes falados por voz", "Personalização de avisos", "Mais opções de organização", "Histórico ampliado"),
-                current = activeTier == OrbitPlanTier.PLUS,
-                buttonLabel = if (activeTier == OrbitPlanTier.PLUS) "PLANO ATUAL" else if (plusReady) "ASSINAR" else "INDISPONÍVEL",
-                enabled = activeTier != OrbitPlanTier.PLUS && plusReady, accent = PlansCyan, onClick = { onSubscribe(OrbitPlanTier.PLUS) }
+                current = activeTier == OrbitPlanTier.PLUS, buttonLabel = if (activeTier == OrbitPlanTier.PLUS) "PLANO ATUAL" else "ASSINAR",
+                enabled = activeTier != OrbitPlanTier.PLUS, accent = PlansCyan, onClick = { onSubscribe(OrbitPlanTier.PLUS) }
             )
         }
         item {
             PlanCard(
                 name = "ORBIT MAX", price = maxPrice ?: "R$ 49,90 / mês", description = "A experiência completa do SMART ORBIT.",
                 features = listOf("Todos os recursos do PLUS", "Assistente de IA por conversa", "Criar, editar e cancelar agendamentos pelo chat", "Identificação de conflitos de horário", "Planejamento semanal inteligente"),
-                current = activeTier == OrbitPlanTier.MAX,
-                buttonLabel = if (activeTier == OrbitPlanTier.MAX) "PLANO ATUAL" else if (maxReady) "ASSINAR" else "INDISPONÍVEL",
-                enabled = activeTier != OrbitPlanTier.MAX && maxReady, accent = PlansGold, onClick = { onSubscribe(OrbitPlanTier.MAX) }
+                current = activeTier == OrbitPlanTier.MAX, buttonLabel = if (activeTier == OrbitPlanTier.MAX) "PLANO ATUAL" else "ASSINAR",
+                enabled = activeTier != OrbitPlanTier.MAX, accent = PlansGold, onClick = { onSubscribe(OrbitPlanTier.MAX) }
             )
         }
         item {
