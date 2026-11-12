@@ -134,21 +134,25 @@ internal fun EnhancedAddTaskDialog(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun EnhancedAssistantDialog(onDismiss: () -> Unit, onCreateTask: (String, String, String, Int) -> Unit) {
     var prompt by remember { mutableStateOf("") }
-    var answer by remember { mutableStateOf("Olá! Descreva seu compromisso. Vou identificar a data e o horário para você revisar antes de agendar.") }
+    var answer by remember { mutableStateOf("Olá! Escreva o compromisso que deseja adicionar à sua agenda.") }
+    var title by remember { mutableStateOf("") }
+    var selectedTime by remember { mutableStateOf("09:00") }
+    var stage by remember { mutableIntStateOf(0) }
     var draft by remember { mutableStateOf<OrbitScheduleDraft?>(null) }
-    var messageVersion by remember { mutableIntStateOf(0) }
-    val conversation = remember { OrbitScheduleConversation() }
+    var showDatePicker by remember { mutableStateOf(false) }
+    val timeState = rememberTimePickerState(initialHour = 9, initialMinute = 0, is24Hour = true)
 
-    fun reply(message: String) { answer = message; messageVersion++ }
-    fun interpret() {
-        val command = prompt.trim()
-        if (command.isBlank()) return
-        val result = conversation.submit(command)
-        draft = result.draft
-        reply(result.message)
+    fun sendCommitment() {
+        val value = prompt.trim()
+        if (value.isBlank()) return
+        title = value
+        draft = null
+        stage = 1
+        answer = "Compromisso recebido: $value. Agora escolha o horário no relógio abaixo."
         prompt = ""
     }
 
@@ -165,29 +169,83 @@ internal fun EnhancedAssistantDialog(onDismiss: () -> Unit, onCreateTask: (Strin
                     Text("ORBIT Assistente", fontSize = 20.sp, fontWeight = FontWeight.ExtraBold)
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Box(Modifier.size(7.dp).background(SGreen, CircleShape)); Spacer(Modifier.width(6.dp))
-                        Text("INTERPRETAÇÃO NO APARELHO", color = SMuted, fontSize = 9.sp, letterSpacing = .5.sp)
+                        Text("AGENDAMENTO GUIADO", color = SMuted, fontSize = 9.sp, letterSpacing = .5.sp)
                     }
                 }
             }
         },
         text = {
-            Column(Modifier.fillMaxWidth().heightIn(max = 550.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(Modifier.fillMaxWidth().heightIn(max = 550.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Surface(color = SPanel2, shape = RoundedCornerShape(17.dp)) {
-                    Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("CONVERSA", color = SCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
-                            Spacer(Modifier.weight(1f)); Text("SMART ORBIT", color = SMuted, fontSize = 9.sp)
+                    Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("CONVERSA", color = SCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                        Text(answer, color = SText, fontSize = 13.sp, lineHeight = 19.sp)
+                        if (title.isNotBlank()) {
+                            Text("COMPROMISSO", color = SMuted, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                            Text(title, color = SText, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                         }
-                        AnimatedContent(
-                            targetState = messageVersion,
-                            transitionSpec = { (fadeIn() + slideInVertically { it / 5 }) togetherWith (fadeOut() + slideOutVertically { -it / 5 }) },
-                            label = "assistantReply"
-                        ) { Text(answer, color = SText, fontSize = 13.sp, lineHeight = 19.sp) }
                     }
                 }
-                AnimatedVisibility(draft != null, enter = fadeIn() + slideInVertically(initialOffsetY = { it / 3 }), exit = fadeOut() + slideOutVertically()) {
+
+                if (stage == 0) {
+                    OutlinedTextField(
+                        value = prompt, onValueChange = { prompt = it },
+                        modifier = Modifier.fillMaxWidth(), label = { Text("Qual é o compromisso?") },
+                        placeholder = { Text("Ex.: Consulta no dentista") },
+                        minLines = 2, maxLines = 3, shape = RoundedCornerShape(14.dp)
+                    )
+                    Button(
+                        onClick = { sendCommitment() }, enabled = prompt.isNotBlank(),
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = SBlue), shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Icon(Icons.Default.Send, null, modifier = Modifier.size(17.dp)); Spacer(Modifier.width(8.dp)); Text("ENVIAR COMPROMISSO")
+                    }
+                }
+
+                if (stage == 1) {
+                    Surface(color = SPanel, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
+                        Column(Modifier.fillMaxWidth().padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Text("02  •  DEFINA O HORÁRIO", color = SCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            TimePicker(state = timeState)
+                            Button(
+                                onClick = {
+                                    selectedTime = "%02d:%02d".format(Locale.US, timeState.hour, timeState.minute)
+                                    stage = 2
+                                    answer = "Horário definido para $selectedTime. Agora escolha o dia e o mês no calendário."
+                                },
+                                modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = SBlue),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Icon(Icons.Default.Schedule, null, modifier = Modifier.size(17.dp)); Spacer(Modifier.width(7.dp)); Text("CONFIRMAR HORÁRIO")
+                            }
+                        }
+                    }
+                }
+
+                if (stage == 2) {
+                    Surface(color = SPanel, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
+                        Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Text("03  •  ESCOLHA O DIA E O MÊS", color = SCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.Schedule, null, tint = SCyan)
+                                Spacer(Modifier.width(8.dp))
+                                Text("Horário selecionado: $selectedTime", color = SText, fontWeight = FontWeight.SemiBold)
+                            }
+                            Button(
+                                onClick = { showDatePicker = true },
+                                modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = SBlue),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Icon(Icons.Default.CalendarMonth, null, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("ABRIR CALENDÁRIO E ESCOLHER DATA")
+                            }
+                        }
+                    }
+                }
+
+                AnimatedVisibility(draft != null, enter = fadeIn() + slideInVertically(initialOffsetY = { it / 3 }), exit = fadeOut()) {
                     draft?.let { item ->
-                        Surface(color = SBlue.copy(alpha = .14f), shape = RoundedCornerShape(17.dp), modifier = Modifier.fillMaxWidth().animateContentSize()) {
+                        Surface(color = SBlue.copy(alpha = .14f), shape = RoundedCornerShape(17.dp), modifier = Modifier.fillMaxWidth()) {
                             Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Icon(Icons.Default.EventAvailable, null, tint = SCyan)
@@ -196,42 +254,66 @@ internal fun EnhancedAssistantDialog(onDismiss: () -> Unit, onCreateTask: (Strin
                                 Text(item.title, color = SText, fontSize = 17.sp, fontWeight = FontWeight.Bold)
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Icon(Icons.Default.CalendarMonth, null, tint = SMuted, modifier = Modifier.size(16.dp)); Spacer(Modifier.width(6.dp))
-                                    Text(item.date, color = SText, fontSize = 12.sp); Spacer(Modifier.width(12.dp))
+                                    Text(scheduleDisplayDate(item.date), color = SText, fontSize = 12.sp); Spacer(Modifier.width(12.dp))
                                     Icon(Icons.Default.Schedule, null, tint = SMuted, modifier = Modifier.size(16.dp)); Spacer(Modifier.width(5.dp))
                                     Text(item.time, color = SText, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                                 }
-                                Text(if (item.reminderLeadMinutes > 0) "Aviso ${item.reminderLeadMinutes} minutos antes" else "Aviso no horário do compromisso", color = SMuted, fontSize = 11.sp)
                                 Button(
                                     onClick = {
                                         onCreateTask(item.title, item.date, item.time, item.reminderLeadMinutes)
                                         draft = null
-                                        reply("COMPROMISSO AGENDADO. A notificação e o aviso falado foram programados.")
+                                        title = ""
+                                        stage = 0
+                                        answer = "COMPROMISSO AGENDADO. Seu lembrete foi programado."
                                     },
                                     modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = SBlue),
                                     shape = RoundedCornerShape(12.dp)
                                 ) {
                                     Icon(Icons.Default.CheckCircle, null, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(7.dp))
-                                    Text("CONFIRMAR AGENDAMENTO DO COMPROMISSO", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                    Text("CONFIRMAR AGENDAMENTO", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                                 }
                             }
                         }
                     }
                 }
-                OutlinedTextField(
-                    value = prompt, onValueChange = { prompt = it; draft = null },
-                    modifier = Modifier.fillMaxWidth(), label = { Text("Descreva seu compromisso") },
-                    placeholder = { Text("Ex.: Me lembre de estudar amanhã às 19h") },
-                    minLines = 2, maxLines = 3, shape = RoundedCornerShape(14.dp)
-                )
-                Button(onClick = { interpret() }, enabled = prompt.isNotBlank(), modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(containerColor = SBlue), shape = RoundedCornerShape(12.dp)) {
-                    Icon(Icons.Default.Send, null, modifier = Modifier.size(17.dp)); Spacer(Modifier.width(8.dp)); Text("INTERPRETAR COMPROMISSO")
+
+                if (stage > 0 && draft == null) {
+                    TextButton(onClick = {
+                        stage = 0
+                        title = ""
+                        answer = "Tudo bem. Escreva novamente o compromisso que deseja adicionar."
+                    }, modifier = Modifier.align(Alignment.CenterHorizontally)) {
+                        Text("Cancelar e começar novamente", color = SMuted)
+                    }
                 }
-                Text("Os comandos são interpretados localmente. Nada é agendado antes da sua confirmação.", color = SMuted, fontSize = 10.sp, lineHeight = 15.sp)
+                Text("O compromisso só será salvo depois que você revisar e confirmar.", color = SMuted, fontSize = 10.sp, lineHeight = 15.sp)
             }
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text("Fechar", color = SMuted) } }
     )
+
+    if (showDatePicker) {
+        val dateState = rememberDatePickerState()
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    val millis = dateState.selectedDateMillis
+                    if (millis != null) {
+                        val chosenDate = scheduleFormatDate(millis)
+                        if (scheduleIsFuture(chosenDate, selectedTime)) {
+                            draft = OrbitScheduleDraft(title, chosenDate, selectedTime, 0)
+                            answer = "Data e horário definidos. Confira o resumo antes de confirmar."
+                        } else {
+                            answer = "Essa data e esse horário já passaram. Escolha uma data futura."
+                        }
+                    }
+                    showDatePicker = false
+                }) { Text("Confirmar data") }
+            },
+            dismissButton = { TextButton(onClick = { showDatePicker = false }) { Text("Cancelar") } }
+        ) { DatePicker(state = dateState, showModeToggle = false) }
+    }
 }
 
 private fun scheduleParseDate(value: String): Long? {
