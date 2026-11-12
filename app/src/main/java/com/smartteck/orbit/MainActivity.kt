@@ -663,32 +663,27 @@ private fun AssistantDialog(
         mutableStateOf("Olá! Escreva um compromisso com data e horário. Eu identifico as informações e programo o lembrete.")
     }
     var proposedSchedule by remember { mutableStateOf<OrbitScheduleDraft?>(null) }
+    val conversation = remember { OrbitScheduleConversation() }
 
     fun processPrompt() {
         val question = prompt.trim()
         if (question.isBlank()) return
 
-        proposedSchedule = null
-        val draft = OrbitCommandParser.parseSchedule(question)
-        if (draft != null) {
-            proposedSchedule = draft
+        val result = conversation.submit(question)
+        proposedSchedule = result.draft
+        answer = if (result.draft != null) {
+            val draft = result.draft
             val reminderDescription = if (draft.reminderLeadMinutes > 0) {
                 "aviso " + draft.reminderLeadMinutes + " minutos antes"
             } else {
                 "aviso no horário do compromisso"
             }
-            answer = "Entendi o compromisso:\n• " + draft.title +
+            "Entendi o compromisso:\n• " + draft.title +
                 "\n• " + draft.date + " às " + draft.time +
                 "\n• " + reminderDescription +
                 "\n\nConfira e confirme para salvar."
-            prompt = ""
-        } else if (OrbitCommandParser.hasSchedulingIntent(question) && !OrbitCommandParser.hasExplicitTime(question)) {
-            answer = "por favor defina o horário do lembrete"
-        } else if (OrbitCommandParser.hasSchedulingIntent(question)) {
-            answer = "Não consegui identificar a data do compromisso. Informe a data e tente novamente."
-        } else {
-            answer = "Eu cuido somente dos seus compromissos e lembretes. Escreva o que deseja lembrar, incluindo a data e o horário."
-        }
+        } else result.message
+        prompt = ""
     }
 
     AlertDialog(
