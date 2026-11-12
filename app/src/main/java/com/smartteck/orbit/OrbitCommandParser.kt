@@ -44,8 +44,11 @@ object OrbitCommandParser {
         "notifique", "notificar", "notificacao", "notificação",
         "me alerte", "alertar", "alerta", "me informe", "me recorde",
         "tenho compromisso", "tenho uma consulta", "tenho consulta",
-        "tenho uma reuniao", "tenho reunião", "tenho uma prova", "tenho prova",
+        "tenho uma reuniao", "tenho reunião", "tenho reuniao", "tenho uma prova", "tenho prova",
         "tenho uma aula", "tenho aula", "tenho um evento", "tenho evento",
+        "compromisso", "reuniao", "reunião", "consulta", "prova", "aula", "evento",
+        "dentista", "medico", "médico", "medica", "médica", "entrega", "entrevista",
+        "treino", "estudar", "pagamento",
         "nao posso perder", "não posso perder", "nao posso me atrasar",
         "não posso me atrasar", "coloque na agenda", "coloca na agenda",
         "adicionar na agenda", "colocar na agenda"
