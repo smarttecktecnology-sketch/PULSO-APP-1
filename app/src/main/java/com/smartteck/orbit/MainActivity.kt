@@ -32,6 +32,16 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import kotlinx.coroutines.delay
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.core.content.ContextCompat
+import androidx.work.ExistingWorkPolicy
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkManager
+import androidx.work.workDataOf
+import java.util.Calendar
+import java.util.concurrent.TimeUnit
 
 private val OrbitBg = Color(0xFF071321)
 private val OrbitPanel = Color(0xFF10243A)
@@ -65,6 +75,13 @@ private fun OrbitApp() {
     var documents by remember { mutableStateOf(loadDocuments(context)) }
     var showTaskDialog by remember { mutableStateOf(false) }
     var showAssistant by remember { mutableStateOf(false) }
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
+    LaunchedEffect(Unit) {
+        createOrbitNotificationChannel(context)
+        if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
 
     val documentPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
         if (uri != null) {
@@ -78,16 +95,20 @@ private fun OrbitApp() {
     }
 
     fun addTask(title: String, date: String) {
-        tasks = tasks + OrbitTask(System.currentTimeMillis(), title.trim(), date.trim(), false)
+        val task = OrbitTask(System.currentTimeMillis(), title.trim(), date.trim(), false)
+        tasks = tasks + task
         saveTasks(context, tasks)
+        scheduleOrbitReminder(context, task)
     }
     fun updateTask(updated: OrbitTask) {
         tasks = tasks.map { if (it.id == updated.id) updated else it }
         saveTasks(context, tasks)
+        if (updated.done) cancelOrbitReminder(context, updated.id) else scheduleOrbitReminder(context, updated)
     }
     fun removeTask(task: OrbitTask) {
         tasks = tasks.filterNot { it.id == task.id }
         saveTasks(context, tasks)
+        cancelOrbitReminder(context, task.id)
     }
 
     MaterialTheme(colorScheme = darkColorScheme(primary = OrbitBlue, background = OrbitBg, surface = OrbitPanel, onBackground = OrbitText, onSurface = OrbitText)) {
@@ -392,6 +413,38 @@ private fun EmptyState(title: String, subtitle: String, icon: androidx.compose.u
             Text(subtitle, color = OrbitMuted, fontSize = 12.sp)
         }
     }
+}
+
+
+private fun scheduleOrbitReminder(context: Context, task: OrbitTask) {
+    if (task.dueDate.isBlank() || task.done) return
+    val parsed = try {
+        SimpleDateFormat("yyyy-MM-dd", Locale.US).apply { isLenient = false }.parse(task.dueDate)
+    } catch (_: Exception) { null } ?: return
+    val now = Calendar.getInstance()
+    val due = Calendar.getInstance().apply {
+        time = parsed
+        set(Calendar.HOUR_OF_DAY, 9); set(Calendar.MINUTE, 0)
+        set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
+    }
+    val today = now.get(Calendar.YEAR) == due.get(Calendar.YEAR) &&
+        now.get(Calendar.DAY_OF_YEAR) == due.get(Calendar.DAY_OF_YEAR)
+    if (due.before(now)) {
+        if (!today) return
+        due.timeInMillis = now.timeInMillis + TimeUnit.MINUTES.toMillis(1)
+    }
+    val request = OneTimeWorkRequestBuilder<OrbitReminderWorker>()
+        .setInitialDelay((due.timeInMillis - now.timeInMillis).coerceAtLeast(0L), TimeUnit.MILLISECONDS)
+        .setInputData(workDataOf(
+            OrbitReminderWorker.KEY_TITLE to task.title,
+            OrbitReminderWorker.KEY_TASK_ID to task.id
+        )).build()
+    WorkManager.getInstance(context).enqueueUniqueWork(
+        "orbit_task_reminder_${task.id}", ExistingWorkPolicy.REPLACE, request
+    )
+}
+private fun cancelOrbitReminder(context: Context, taskId: Long) {
+    WorkManager.getInstance(context).cancelUniqueWork("orbit_task_reminder_${taskId}")
 }
 
 private fun loadTasks(context: Context): List<OrbitTask> = try {
