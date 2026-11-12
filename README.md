@@ -8,11 +8,12 @@ Aplicativo Android de organização pessoal, desenvolvido com Kotlin e Jetpack C
 
 - Painel inicial com resumo de tarefas e arquivos.
 - Navegação entre Início, Tarefas, Agenda e Arquivos.
-- Cadastro de tarefas com data e horário de lembrete.
+- Cadastro e edição de tarefas com seleção visual de data e horário do lembrete.
 - Marcar tarefas como concluídas e excluir tarefas.
-- Agendamento de lembretes locais com WorkManager; os horários podem sofrer pequenos atrasos do Android.
+- Agendamento de lembretes locais com WorkManager e recuperação dos lembretes pendentes ao abrir o app; os horários podem sofrer pequenos atrasos do Android.
+- Priorização das próximas tarefas e identificação visual de tarefas atrasadas.
 - Persistência local de tarefas e referências de documentos.
-- Seleção de arquivos pelo seletor nativo do Android.
+- Seleção de arquivos pelo seletor nativo do Android e abertura pelo aplicativo compatível instalado.
 - Interface em tema azul-escuro com cartões, indicadores e atalhos.
 
 ## Em desenvolvimento / ainda não conectado
