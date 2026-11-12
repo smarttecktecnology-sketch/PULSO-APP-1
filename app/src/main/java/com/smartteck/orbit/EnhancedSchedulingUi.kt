@@ -163,7 +163,7 @@ internal fun EnhancedAssistantDialog(
         answer = "Tudo bem. Escreva novamente o compromisso que deseja adicionar."
     }
 
-    val conflictingDates = if (selectedDate.isNotBlank()) {
+    val conflictingDates: List<String> = if (selectedDate.isNotBlank()) {
         orbitRecurrenceDates(selectedDate, recurrence).filter { date ->
             tasks.any { !it.done && it.dueDate == date && it.reminderTime == selectedTime }
         }
