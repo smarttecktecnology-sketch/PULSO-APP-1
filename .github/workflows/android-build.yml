@@ -21,16 +21,21 @@ jobs:
         with:
           gradle-version: '8.9'
       - name: Run unit tests
-        run: gradle --no-daemon :app:testDebugUnitTest
-      - name: Build debug APK
-        run: gradle --no-daemon :app:assembleDebug
-      # Publish immediately after a successful build so emulator issues
-      # cannot prevent the user from retrieving the APK.
-      - name: Upload APK
+        run: gradle --no-daemon :app:testTestDebugUnitTest :app:testOfficialDebugUnitTest
+      - name: Build test and official APKs
+        run: gradle --no-daemon :app:assembleTestDebug :app:assembleOfficialDebug
+      - name: Upload free test APK
         uses: actions/upload-artifact@v4
         with:
-          name: smart-teck-orbit-debug
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: smart-orbit-test-free
+          path: app/build/outputs/apk/test/debug/app-test-debug.apk
+          if-no-files-found: error
+          retention-days: 14
+      - name: Upload official edition APK (debug-signed)
+        uses: actions/upload-artifact@v4
+        with:
+          name: smart-orbit-official-subscriptions-preview
+          path: app/build/outputs/apk/official/debug/app-official-debug.apk
           if-no-files-found: error
           retention-days: 14
       - name: Run Android emulator smoke test
@@ -43,11 +48,11 @@ jobs:
           profile: pixel_2
           disable-animations: true
           script: |
-            adb install -r app/build/outputs/apk/debug/app-debug.apk
-            adb shell am force-stop com.smartteck.orbit
-            adb shell monkey -p com.smartteck.orbit -c android.intent.category.LAUNCHER 1
+            adb install -r app/build/outputs/apk/test/debug/app-test-debug.apk
+            adb shell am force-stop com.smartteck.orbit.test
+            adb shell monkey -p com.smartteck.orbit.test -c android.intent.category.LAUNCHER 1
             sleep 10
-            adb shell pidof com.smartteck.orbit
+            adb shell pidof com.smartteck.orbit.test
       - name: Report emulator smoke test result
         if: always()
         run: |
