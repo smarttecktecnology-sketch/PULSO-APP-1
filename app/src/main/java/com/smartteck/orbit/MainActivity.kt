@@ -556,7 +556,15 @@ private fun AssistantDialog(
         val scheduleDraft = OrbitCommandParser.parseSchedule(question)
         if (scheduleDraft != null) {
             proposedSchedule = scheduleDraft
-            answer = "Entendi este agendamento:\n• ${scheduleDraft.title}\n• ${scheduleDraft.date} às ${scheduleDraft.time}\n• " + if (scheduleDraft.reminderLeadMinutes > 0) "lembrete ${scheduleDraft.reminderLeadMinutes} minutos antes" else "lembrete no horário marcado" + ".\nConfirme abaixo para salvar no aparelho."
+            val reminderDescription = if (scheduleDraft.reminderLeadMinutes > 0) "lembrete ${scheduleDraft.reminderLeadMinutes} minutos antes" else "lembrete no horário marcado"
+            answer = "Entendi este agendamento:\n• ${scheduleDraft.title}\n• ${scheduleDraft.date} às ${scheduleDraft.time}\n• $reminderDescription.\nConfirme abaixo para salvar no aparelho."
+            prompt = ""
+            return
+        }
+        val scheduleIntent = listOf("agende", "agendar", "agenda", "marque", "marcar", "me lembre", "lembrete")
+            .any { normalized.startsWith(it) }
+        if (scheduleIntent) {
+            answer = "Consigo fazer isso! Informe a data e o horário. Exemplo: “Agende reunião amanhã às 15h e me lembre 30 minutos antes”."
             prompt = ""
             return
         }
@@ -578,6 +586,13 @@ private fun AssistantDialog(
                 val overdue = pending.count { it.dueDate.length == 10 && it.dueDate < today }
                 val todayCount = pending.count { it.dueDate == today }
                 "Resumo do ORBIT:\n• ${pending.size} pendente(s)\n• $completed concluída(s)\n• $overdue atrasada(s)\n• $todayCount para hoje\n• ${tasks.size} tarefa(s) no total."
+            }
+            normalized.contains("amanha") -> {
+                val tomorrow = Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, 1) }
+                val tomorrowIso = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(tomorrow.time)
+                val itemsTomorrow = pending.filter { it.dueDate == tomorrowIso }
+                if (itemsTomorrow.isEmpty()) "Você não tem compromissos pendentes para amanhã."
+                else "Agenda de amanhã:\n" + itemsTomorrow.joinToString("\n") { "• ${it.title} — ${it.reminderTime}" }
             }
             normalized.contains("hoje") -> {
                 val todays = pending.filter { it.dueDate == today }
@@ -675,7 +690,8 @@ private fun AssistantDialog(
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton(onClick = {
                         proposedTask = null
-                        answer = "Comandos disponíveis:\n• resumo das tarefas\n• o que tenho para hoje?\n• mostrar atrasadas\n• priorizar meu dia\n• buscar: palavra\n• criar tarefa: nome"
+                        proposedSchedule = null
+                        answer = "Comandos disponíveis:\n• resumo das tarefas\n• o que tenho para hoje?\n• o que tenho amanhã?\n• mostrar atrasadas\n• priorizar meu dia\n• buscar: palavra\n• criar tarefa: nome\n• agendar reunião amanhã às 15h\n• agendar prova sexta às 10h e me lembrar 30 minutos antes"
                     }, modifier = Modifier.weight(1f)) { Text("Ajuda") }
                     Button(onClick = { processPrompt() }, enabled = prompt.isNotBlank(), modifier = Modifier.weight(1f)) {
                         Icon(Icons.Default.Send, null); Spacer(Modifier.width(7.dp)); Text("Enviar")
