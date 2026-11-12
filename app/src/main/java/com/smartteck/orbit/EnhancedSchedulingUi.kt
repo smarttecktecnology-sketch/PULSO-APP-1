@@ -136,25 +136,39 @@ internal fun EnhancedAddTaskDialog(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun EnhancedAssistantDialog(onDismiss: () -> Unit, onCreateTask: (String, String, String, Int) -> Unit) {
+internal fun EnhancedAssistantDialog(
+    tasks: List<OrbitTask>,
+    onDismiss: () -> Unit,
+    onCreateTask: (String, String, String, Int, String) -> Unit
+) {
     var prompt by remember { mutableStateOf("") }
     var answer by remember { mutableStateOf("Olá! Escreva o compromisso que deseja adicionar à sua agenda.") }
     var title by remember { mutableStateOf("") }
     var selectedTime by remember { mutableStateOf("09:00") }
+    var selectedDate by remember { mutableStateOf("") }
     var stage by remember { mutableIntStateOf(0) }
     var draft by remember { mutableStateOf<OrbitScheduleDraft?>(null) }
     var showDatePicker by remember { mutableStateOf(false) }
-    val timeState = rememberTimePickerState(initialHour = 9, initialMinute = 0, is24Hour = true)
+    var recurrence by remember { mutableStateOf("once") }
+    var recurrenceExpanded by remember { mutableStateOf(false) }
 
-    fun sendCommitment() {
-        val value = prompt.trim()
-        if (value.isBlank()) return
-        title = value
-        draft = null
-        stage = 1
-        answer = "Compromisso recebido: $value. Agora escolha o horário no relógio abaixo."
+    fun resetFlow() {
         prompt = ""
+        title = ""
+        selectedTime = "09:00"
+        selectedDate = ""
+        recurrence = "once"
+        draft = null
+        stage = 0
+        answer = "Tudo bem. Escreva novamente o compromisso que deseja adicionar."
     }
+
+    val conflictingDates = if (selectedDate.isNotBlank()) {
+        orbitRecurrenceDates(selectedDate, recurrence).filter { date ->
+            tasks.any { !it.done && it.dueDate == date && it.reminderTime == selectedTime }
+        }
+    } else emptyList()
+    val hasConflict = conflictingDates.isNotEmpty()
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -175,7 +189,7 @@ internal fun EnhancedAssistantDialog(onDismiss: () -> Unit, onCreateTask: (Strin
             }
         },
         text = {
-            Column(Modifier.fillMaxWidth().heightIn(max = 550.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(Modifier.fillMaxWidth().heightIn(max = 570.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Surface(color = SPanel2, shape = RoundedCornerShape(17.dp)) {
                     Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text("CONVERSA", color = SCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
@@ -187,57 +201,78 @@ internal fun EnhancedAssistantDialog(onDismiss: () -> Unit, onCreateTask: (Strin
                     }
                 }
 
-                if (stage == 0) {
-                    OutlinedTextField(
-                        value = prompt, onValueChange = { prompt = it },
-                        modifier = Modifier.fillMaxWidth(), label = { Text("Qual é o compromisso?") },
-                        placeholder = { Text("Ex.: Consulta no dentista") },
-                        minLines = 2, maxLines = 3, shape = RoundedCornerShape(14.dp)
-                    )
-                    Button(
-                        onClick = { sendCommitment() }, enabled = prompt.isNotBlank(),
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(containerColor = SBlue), shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Icon(Icons.Default.Send, null, modifier = Modifier.size(17.dp)); Spacer(Modifier.width(8.dp)); Text("ENVIAR COMPROMISSO")
-                    }
-                }
-
-                if (stage == 1) {
-                    Surface(color = SPanel, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
-                        Column(Modifier.fillMaxWidth().padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Text("02  •  DEFINA O HORÁRIO", color = SCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                            TimePicker(state = timeState)
-                            Button(
-                                onClick = {
-                                    selectedTime = "%02d:%02d".format(Locale.US, timeState.hour, timeState.minute)
-                                    stage = 2
-                                    answer = "Horário definido para $selectedTime. Agora escolha o dia e o mês no calendário."
-                                },
-                                modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = SBlue),
-                                shape = RoundedCornerShape(12.dp)
-                            ) {
-                                Icon(Icons.Default.Schedule, null, modifier = Modifier.size(17.dp)); Spacer(Modifier.width(7.dp)); Text("CONFIRMAR HORÁRIO")
+                AnimatedContent(targetState = stage, label = "orbit_schedule_steps") { currentStage ->
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        when (currentStage) {
+                            0 -> {
+                                OutlinedTextField(
+                                    value = prompt, onValueChange = { prompt = it },
+                                    modifier = Modifier.fillMaxWidth(), label = { Text("Qual é o compromisso?") },
+                                    placeholder = { Text("Ex.: Consulta no dentista") },
+                                    minLines = 2, maxLines = 3, shape = RoundedCornerShape(14.dp)
+                                )
+                                Button(
+                                    onClick = {
+                                        val value = prompt.trim()
+                                        if (value.isNotBlank()) {
+                                            title = value
+                                            draft = null
+                                            selectedDate = ""
+                                            recurrence = "once"
+                                            stage = 1
+                                            answer = "Compromisso recebido. Agora escolha o horário no relógio."
+                                            prompt = ""
+                                        }
+                                    }, enabled = prompt.isNotBlank(),
+                                    modifier = Modifier.fillMaxWidth(),
+                                    colors = ButtonDefaults.buttonColors(containerColor = SBlue), shape = RoundedCornerShape(12.dp)
+                                ) {
+                                    Icon(Icons.Default.Send, null, modifier = Modifier.size(17.dp)); Spacer(Modifier.width(8.dp)); Text("ENVIAR COMPROMISSO")
+                                }
                             }
-                        }
-                    }
-                }
-
-                if (stage == 2) {
-                    Surface(color = SPanel, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
-                        Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Text("03  •  ESCOLHA O DIA E O MÊS", color = SCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Default.Schedule, null, tint = SCyan)
-                                Spacer(Modifier.width(8.dp))
-                                Text("Horário selecionado: $selectedTime", color = SText, fontWeight = FontWeight.SemiBold)
+                            1 -> {
+                                Surface(color = SPanel, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
+                                    Column(Modifier.fillMaxWidth().padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                        Text("01  •  DEFINA O HORÁRIO", color = SCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                        key(stage) {
+                                            val hour = selectedTime.substringBefore(":").toIntOrNull()?.coerceIn(0, 23) ?: 9
+                                            val minute = selectedTime.substringAfter(":", "00").toIntOrNull()?.coerceIn(0, 59) ?: 0
+                                            val timeState = rememberTimePickerState(initialHour = hour, initialMinute = minute, is24Hour = true)
+                                            TimePicker(state = timeState)
+                                            Button(
+                                                onClick = {
+                                                    selectedTime = "%02d:%02d".format(Locale.US, timeState.hour, timeState.minute)
+                                                    stage = 2
+                                                    answer = "Horário definido para $selectedTime. Agora escolha a data no calendário."
+                                                },
+                                                modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = SBlue),
+                                                shape = RoundedCornerShape(12.dp)
+                                            ) {
+                                                Icon(Icons.Default.Schedule, null, modifier = Modifier.size(17.dp)); Spacer(Modifier.width(7.dp)); Text("CONFIRMAR HORÁRIO")
+                                            }
+                                        }
+                                    }
+                                }
                             }
-                            Button(
-                                onClick = { showDatePicker = true },
-                                modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = SBlue),
-                                shape = RoundedCornerShape(12.dp)
-                            ) {
-                                Icon(Icons.Default.CalendarMonth, null, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("ABRIR CALENDÁRIO E ESCOLHER DATA")
+                            2 -> {
+                                Surface(color = SPanel, shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
+                                    Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                        Text("02  •  ESCOLHA A DATA", color = SCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(Icons.Default.Schedule, null, tint = SCyan)
+                                            Spacer(Modifier.width(8.dp))
+                                            Text("Horário: $selectedTime", color = SText, fontWeight = FontWeight.SemiBold)
+                                        }
+                                        Button(
+                                            onClick = { showDatePicker = true },
+                                            modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = SBlue),
+                                            shape = RoundedCornerShape(12.dp)
+                                        ) {
+                                            Icon(Icons.Default.CalendarMonth, null, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(8.dp))
+                                            Text(if (selectedDate.isBlank()) "ABRIR CALENDÁRIO" else scheduleDisplayDate(selectedDate))
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -251,21 +286,65 @@ internal fun EnhancedAssistantDialog(onDismiss: () -> Unit, onCreateTask: (Strin
                                     Icon(Icons.Default.EventAvailable, null, tint = SCyan)
                                     Spacer(Modifier.width(7.dp)); Text("REVISÃO DO AGENDAMENTO", color = SCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                                 }
-                                Text(item.title, color = SText, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                                OutlinedTextField(
+                                    value = title, onValueChange = { title = it },
+                                    modifier = Modifier.fillMaxWidth(), label = { Text("Nome do compromisso") },
+                                    singleLine = true, shape = RoundedCornerShape(12.dp)
+                                )
                                 Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(Icons.Default.CalendarMonth, null, tint = SMuted, modifier = Modifier.size(16.dp)); Spacer(Modifier.width(6.dp))
-                                    Text(scheduleDisplayDate(item.date), color = SText, fontSize = 12.sp); Spacer(Modifier.width(12.dp))
-                                    Icon(Icons.Default.Schedule, null, tint = SMuted, modifier = Modifier.size(16.dp)); Spacer(Modifier.width(5.dp))
-                                    Text(item.time, color = SText, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                    Icon(Icons.Default.CalendarMonth, null, tint = SMuted, modifier = Modifier.size(16.dp))
+                                    Spacer(Modifier.width(6.dp)); Text(scheduleDisplayDate(item.date), color = SText, fontSize = 12.sp)
+                                    Spacer(Modifier.weight(1f))
+                                    TextButton(onClick = { draft = null; stage = 2; answer = "Escolha outra data para o compromisso." }) { Text("Editar data") }
                                 }
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Icons.Default.Schedule, null, tint = SMuted, modifier = Modifier.size(16.dp))
+                                    Spacer(Modifier.width(6.dp)); Text(selectedTime, color = SText, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                    Spacer(Modifier.weight(1f))
+                                    TextButton(onClick = { draft = null; stage = 1; answer = "Escolha outro horário para o compromisso." }) { Text("Editar horário") }
+                                }
+                                Box {
+                                    OutlinedButton(onClick = { recurrenceExpanded = true }, modifier = Modifier.fillMaxWidth()) {
+                                        Icon(Icons.Default.Repeat, null, tint = SCyan); Spacer(Modifier.width(8.dp))
+                                        Text("Repetição: " + when (recurrence) { "daily" -> "Diariamente"; "weekly" -> "Semanalmente"; "monthly" -> "Mensalmente"; else -> "Não repetir" })
+                                        Spacer(Modifier.weight(1f)); Icon(Icons.Default.ArrowDropDown, null)
+                                    }
+                                    DropdownMenu(expanded = recurrenceExpanded, onDismissRequest = { recurrenceExpanded = false }) {
+                                        listOf("once" to "Não repetir", "daily" to "Diariamente", "weekly" to "Semanalmente", "monthly" to "Mensalmente").forEach { option ->
+                                            DropdownMenuItem(text = { Text(option.second) }, onClick = {
+                                                recurrence = option.first
+                                                recurrenceExpanded = false
+                                            })
+                                        }
+                                    }
+                                }
+                                if (hasConflict) {
+                                    Surface(color = Color(0xFF542B38), shape = RoundedCornerShape(12.dp)) {
+                                        Row(Modifier.fillMaxWidth().padding(11.dp), verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(Icons.Default.Warning, null, tint = Color(0xFFFFC5CF))
+                                            Spacer(Modifier.width(8.dp))
+                                            Text(
+                                                "Conflito de horário: já existe compromisso nesse horário em " +
+                                                    conflictingDates.joinToString { scheduleDisplayDate(it) } +
+                                                    ". Altere a data, o horário ou a repetição.",
+                                                color = Color(0xFFFFC5CF), fontSize = 11.sp, lineHeight = 16.sp
+                                            )
+                                        }
+                                    }
+                                }
+                                Text(
+                                    if (recurrence == "once") "Será criado 1 compromisso." else "Serão criadas até 12 ocorrências, uma para cada período.",
+                                    color = SMuted, fontSize = 10.sp
+                                )
                                 Button(
                                     onClick = {
-                                        onCreateTask(item.title, item.date, item.time, item.reminderLeadMinutes)
-                                        draft = null
-                                        title = ""
-                                        stage = 0
-                                        answer = "COMPROMISSO AGENDADO. Seu lembrete foi programado."
+                                        if (title.isNotBlank() && !hasConflict && scheduleIsFuture(item.date, selectedTime)) {
+                                            onCreateTask(title.trim(), item.date, selectedTime, item.reminderLeadMinutes, recurrence)
+                                            resetFlow()
+                                            answer = "COMPROMISSO AGENDADO. Seu lembrete foi programado."
+                                        }
                                     },
+                                    enabled = title.isNotBlank() && !hasConflict && scheduleIsFuture(item.date, selectedTime),
                                     modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = SBlue),
                                     shape = RoundedCornerShape(12.dp)
                                 ) {
@@ -277,23 +356,19 @@ internal fun EnhancedAssistantDialog(onDismiss: () -> Unit, onCreateTask: (Strin
                     }
                 }
 
-                if (stage > 0 && draft == null) {
-                    TextButton(onClick = {
-                        stage = 0
-                        title = ""
-                        answer = "Tudo bem. Escreva novamente o compromisso que deseja adicionar."
-                    }, modifier = Modifier.align(Alignment.CenterHorizontally)) {
+                if (stage > 0) {
+                    TextButton(onClick = { resetFlow() }, modifier = Modifier.align(Alignment.CenterHorizontally)) {
                         Text("Cancelar e começar novamente", color = SMuted)
                     }
                 }
-                Text("O compromisso só será salvo depois que você revisar e confirmar.", color = SMuted, fontSize = 10.sp, lineHeight = 15.sp)
+                Text("O compromisso só será salvo depois da revisão e confirmação. O ORBIT também verifica conflitos de horário.", color = SMuted, fontSize = 10.sp, lineHeight = 15.sp)
             }
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text("Fechar", color = SMuted) } }
     )
 
     if (showDatePicker) {
-        val dateState = rememberDatePickerState()
+        val dateState = rememberDatePickerState(initialSelectedDateMillis = if (selectedDate.isBlank()) null else scheduleParseDate(selectedDate))
         DatePickerDialog(
             onDismissRequest = { showDatePicker = false },
             confirmButton = {
@@ -302,10 +377,12 @@ internal fun EnhancedAssistantDialog(onDismiss: () -> Unit, onCreateTask: (Strin
                     if (millis != null) {
                         val chosenDate = scheduleFormatDate(millis)
                         if (scheduleIsFuture(chosenDate, selectedTime)) {
+                            selectedDate = chosenDate
                             draft = OrbitScheduleDraft(title, chosenDate, selectedTime, 0)
-                            answer = "Data e horário definidos. Confira o resumo antes de confirmar."
+                            stage = 2
+                            answer = "Data e horário definidos. Confira os dados, edite se necessário e confirme."
                         } else {
-                            answer = "Essa data e esse horário já passaram. Escolha uma data futura."
+                            answer = "Essa data e esse horário já passaram. Escolha uma data e um horário futuros."
                         }
                     }
                     showDatePicker = false
