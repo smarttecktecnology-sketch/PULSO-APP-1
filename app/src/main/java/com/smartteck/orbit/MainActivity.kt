@@ -1,9 +1,11 @@
 package com.smartteck.orbit
 
 import android.content.Context
+import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import android.provider.OpenableColumns
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -323,6 +325,7 @@ private fun AgendaScreen(tasks: List<OrbitTask>) {
 
 @Composable
 private fun FilesScreen(documents: List<OrbitDocument>, onAdd: () -> Unit, onDelete: (OrbitDocument) -> Unit) {
+    val context = LocalContext.current
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item { Text("Seus arquivos", color = OrbitText, fontSize = 27.sp, fontWeight = FontWeight.Bold); Text("Guarde recibos, comprovantes, garantias e documentos importantes.", color = OrbitMuted, fontSize = 13.sp) }
         item {
@@ -339,10 +342,27 @@ private fun FilesScreen(documents: List<OrbitDocument>, onAdd: () -> Unit, onDel
         item { SectionHeader("Arquivos salvos", "${documents.size} itens") }
         if (documents.isEmpty()) item { EmptyState("Nenhum arquivo adicionado", "Seus arquivos aparecerão aqui depois de selecionados.", Icons.Default.Description) }
         items(documents, key = { it.uri }) { doc ->
-            Card(colors = CardDefaults.cardColors(containerColor = OrbitPanel), shape = RoundedCornerShape(15.dp)) {
+            Card(
+                onClick = {
+                    try {
+                        val uri = Uri.parse(doc.uri)
+                        val mime = context.contentResolver.getType(uri) ?: "*/*"
+                        val intent = Intent(Intent.ACTION_VIEW).setDataAndType(uri, mime)
+                            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        context.startActivity(Intent.createChooser(intent, "Abrir documento"))
+                    } catch (_: Exception) {
+                        Toast.makeText(context, "Não foi possível abrir este arquivo. Verifique se o aplicativo correspondente está instalado.", Toast.LENGTH_LONG).show()
+                    }
+                },
+                colors = CardDefaults.cardColors(containerColor = OrbitPanel),
+                shape = RoundedCornerShape(15.dp)
+            ) {
                 Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Default.InsertDriveFile, null, tint = OrbitCyan, modifier = Modifier.size(25.dp)); Spacer(Modifier.width(12.dp))
-                    Text(doc.name, color = OrbitText, modifier = Modifier.weight(1f), maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Column(Modifier.weight(1f)) {
+                        Text(doc.name, color = OrbitText, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        Text("Toque para abrir", color = OrbitMuted, fontSize = 10.sp)
+                    }
                     IconButton(onClick = { onDelete(doc) }) { Icon(Icons.Default.DeleteOutline, "Remover", tint = OrbitMuted) }
                 }
             }
