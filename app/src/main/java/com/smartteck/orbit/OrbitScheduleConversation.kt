@@ -20,12 +20,12 @@ class OrbitScheduleConversation {
         if (input.isBlank()) return OrbitAssistantReply("Descreva o compromisso.")
 
         val original = pendingCommand
-        val combined = if (original != null && OrbitCommandParser.hasExplicitTime(input) &&
-            !OrbitCommandParser.hasSchedulingIntent(input)) {
-            "$original $input"
-        } else {
-            input
-        }
+        val isIndependentCompleteRequest =
+            OrbitCommandParser.hasExplicitDate(input) && OrbitCommandParser.hasExplicitTime(input)
+        // Respostas curtas (data, horário ou detalhes) complementam o pedido
+        // incompleto. Uma nova solicitação substitui o rascunho anterior.
+        val isNewRequest = OrbitCommandParser.hasSchedulingIntent(input) || isIndependentCompleteRequest
+        val combined = if (original != null && !isNewRequest) "$original $input" else input
 
         val draft = OrbitCommandParser.parseSchedule(combined)
         if (draft != null) {
@@ -36,13 +36,17 @@ class OrbitScheduleConversation {
             )
         }
 
-        if (OrbitCommandParser.hasSchedulingIntent(input) ||
-            (original != null && OrbitCommandParser.hasExplicitTime(input))) {
+        val belongsToSchedulingFlow = original != null ||
+            OrbitCommandParser.hasSchedulingIntent(input) || isIndependentCompleteRequest
+        if (belongsToSchedulingFlow) {
             pendingCommand = combined
-            return if (!OrbitCommandParser.hasExplicitTime(combined)) {
-                OrbitAssistantReply("por favor defina o horário do lembrete")
-            } else {
-                OrbitAssistantReply("Não consegui identificar uma data válida. Informe a data do compromisso.")
+            return when {
+                !OrbitCommandParser.hasExplicitTime(combined) ->
+                    OrbitAssistantReply("por favor defina o horário do lembrete")
+                !OrbitCommandParser.hasExplicitDate(combined) ->
+                    OrbitAssistantReply("Qual é a data do compromisso?")
+                else ->
+                    OrbitAssistantReply("Não consegui interpretar todos os dados. Informe novamente o compromisso, a data e o horário.")
             }
         }
 
