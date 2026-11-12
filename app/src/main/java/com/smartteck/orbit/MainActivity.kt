@@ -87,9 +87,10 @@ private fun OrbitApp() {
     var maxReady by remember { mutableStateOf(false) }
     var premiumStatus by remember { mutableStateOf("Preparando planos do Google Play…") }
     var voiceRemindersEnabled by remember { mutableStateOf(context.getSharedPreferences("orbit_settings", Context.MODE_PRIVATE).getBoolean("voice_reminders", false)) }
-    val voiceAvailable = activeTier == OrbitPlanTier.PLUS || activeTier == OrbitPlanTier.MAX
+    val effectiveTier = if (BuildConfig.ORBIT_TEST_MODE) OrbitPlanTier.MAX else activeTier
+    val voiceAvailable = effectiveTier == OrbitPlanTier.PLUS || effectiveTier == OrbitPlanTier.MAX
     val billingManager = remember(context) {
-        OrbitBillingManager(context) { tier, status, plus, max, plusIsReady, maxIsReady ->
+        if (BuildConfig.ORBIT_TEST_MODE) null else OrbitBillingManager(context) { tier, status, plus, max, plusIsReady, maxIsReady ->
             activeTier = tier
             context.getSharedPreferences("orbit_settings", Context.MODE_PRIVATE)
                 .edit().putString("active_plan", tier.name).apply()
@@ -101,8 +102,8 @@ private fun OrbitApp() {
         }
     }
     DisposableEffect(billingManager) {
-        billingManager.connect()
-        onDispose { billingManager.close() }
+        billingManager?.connect()
+        onDispose { billingManager?.close() }
     }
     val notificationPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
     LaunchedEffect(Unit) {
@@ -150,7 +151,7 @@ private fun OrbitApp() {
     }
 
     val openAssistant = {
-        if (activeTier == OrbitPlanTier.MAX) showAssistant = true
+        if (effectiveTier == OrbitPlanTier.MAX) showAssistant = true
         else {
             page = OrbitPage.PLANS
             Toast.makeText(context, "O assistente de IA é exclusivo do ORBIT MAX.", Toast.LENGTH_LONG).show()
@@ -208,23 +209,23 @@ private fun OrbitApp() {
         ) { padding ->
             Box(Modifier.fillMaxSize().padding(padding)) {
                 when (page) {
-                    OrbitPage.HOME -> HomeScreen(activeTier, tasks, documents.size, { page = OrbitPage.TASKS }, { page = OrbitPage.AGENDA }, openAssistant, { page = OrbitPage.PLANS }, { updateTask(it.copy(done = !it.done)) })
+                    OrbitPage.HOME -> HomeScreen(effectiveTier, tasks, documents.size, { page = OrbitPage.TASKS }, { page = OrbitPage.AGENDA }, openAssistant, { if (BuildConfig.ORBIT_TEST_MODE) Toast.makeText(context, "Todos os recursos estão liberados na versão de teste.", Toast.LENGTH_SHORT).show() else page = OrbitPage.PLANS }, { updateTask(it.copy(done = !it.done)) })
                     OrbitPage.TASKS -> TasksScreen(tasks, { updateTask(it.copy(done = !it.done)) }, { removeTask(it) }, { editingTask = it })
                     OrbitPage.AGENDA -> AgendaScreen(tasks)
                     OrbitPage.FILES -> FilesScreen(documents, { documentPicker.launch(arrayOf("*/*")) }, {
                         documents = documents.filterNot { doc -> doc.uri == it.uri }; saveDocuments(context, documents)
                     })
                     OrbitPage.PLANS -> OrbitPlansScreen(
-                        activeTier, plusPrice, maxPrice, plusReady, maxReady, premiumStatus,
+                        effectiveTier, plusPrice, maxPrice, plusReady, maxReady, premiumStatus,
                         onSubscribe = { tier ->
                             val activity = context as? Activity
-                            if (activity != null) billingManager.launchPurchase(activity, tier)
+                            if (activity != null) billingManager?.launchPurchase(activity, tier)
                             else Toast.makeText(context, "Não foi possível abrir o Google Play.", Toast.LENGTH_SHORT).show()
                         },
                         onBack = { page = OrbitPage.HOME }
                     )
                     OrbitPage.SETTINGS -> OrbitSettingsScreen(
-                        activeTier, voiceRemindersEnabled,
+                        effectiveTier, voiceRemindersEnabled,
                         onVoiceChanged = { enabled ->
                             if (voiceAvailable) {
                                 voiceRemindersEnabled = enabled
@@ -249,7 +250,7 @@ private fun OrbitApp() {
                 editingTask = null
             }
         }
-        if (showAssistant && activeTier == OrbitPlanTier.MAX) EnhancedAssistantDialog(
+        if (showAssistant && effectiveTier == OrbitPlanTier.MAX) EnhancedAssistantDialog(
             onDismiss = { showAssistant = false },
             onCreateTask = { title, date, time, lead -> addTask(title, date, time, lead) }
         )
