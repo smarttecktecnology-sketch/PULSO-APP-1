@@ -27,11 +27,22 @@ object OrbitCommandParser {
             .replace(Regex("\\s+"), " ")
             .trim()
 
+    private val schedulingKeywords = listOf(
+        "agende", "agendar", "agenda", "marque", "marcar", "crie", "criar",
+        "lembre", "lembrete", "me lembra", "me lembre", "me lembrar",
+        "lembre me", "lembra me", "nao posso esquecer", "nao esquecer",
+        "preciso lembrar", "quero lembrar", "nao deixe eu esquecer",
+        "me avise", "me avisar", "notifique", "notificacao"
+    )
+
+    fun hasSchedulingIntent(command: String): Boolean {
+        val normalized = normalize(command)
+        return schedulingKeywords.any { normalized.contains(it) }
+    }
+
     fun parseSchedule(command: String): OrbitScheduleDraft? {
         val normalized = normalize(command)
-        val schedulingIntent = listOf("agende", "agendar", "agenda", "marque", "marcar", "crie", "criar", "lembre", "lembrete", "me lembra", "me lembre", "me lembrar", "lembre me", "lembra me")
-            .any { normalized.startsWith(it) }
-        if (!schedulingIntent) return null
+        if (!hasSchedulingIntent(command)) return null
 
         val date = parseDate(normalized) ?: return null
         val timeMatch = Regex("\\b(?:as?\\s*)?(\\d{1,2})(?::(\\d{2})|h(\\d{2})?|\\s*horas?)\\b")
@@ -51,7 +62,7 @@ object OrbitCommandParser {
 
         var title = command.trim()
         title = title.replace(Regex("(?i)^\\s*(por favor[, ]*)?(agende|agendar|agenda|marque|marcar|crie|criar)\\s+"), "")
-        title = title.replace(Regex("(?i)^\\s*(me\\s+lembre|me\\s+lembrar|me\\s+lembra(r)?|lembre\\s*me|lembra\\s*me|lembrete)\\s+(de\\s+)?"), "")
+        title = title.replace(Regex("(?i)^\\s*(me\\s+lembre|me\\s+lembrar|me\\s+lembra(r)?|lembre\\s*me|lembra\\s*me|lembrete|preciso\\s+lembrar|quero\\s+lembrar|nao\\s+posso\\s+esquecer|nao\\s+esquecer|nao\\s+deixe\\s+eu\\s+esquecer)\\s+(de\\s+)?"), "")
         title = title.replace(Regex("(?i)\\bdepois\\s+de\\s+amanh[ãa]\\b"), "")
         title = title.replace(Regex("(?i)\\b(hoje|amanh[ãa]|segunda(-feira)?|ter[cç]a(-feira)?|quarta(-feira)?|quinta(-feira)?|sexta(-feira)?|s[áa]bado|domingo)\\b"), "")
         title = title.replace(Regex("\\b\\d{1,2}/\\d{1,2}(/\\d{2,4})?\\b"), "")
