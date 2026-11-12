@@ -20,7 +20,9 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.DialogProperties
 import java.text.SimpleDateFormat
 import java.util.Date
+import java.util.Calendar
 import java.util.Locale
+import java.util.TimeZone
 
 private val SBg = Color(0xFF071321)
 private val SPanel = Color(0xFF10243A)
@@ -46,6 +48,7 @@ internal fun EnhancedAddTaskDialog(
     var validate by remember { mutableStateOf(false) }
     val validTime = Regex("^([01]?[0-9]|2[0-3]):[0-5][0-9]$").matches(time.trim())
     val validDate = date.isNotBlank() && scheduleParseDate(date) != null
+    val futureSchedule = validDate && validTime && scheduleIsFuture(date, time)
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -79,10 +82,10 @@ internal fun EnhancedAddTaskDialog(
                     trailingIcon = { IconButton(onClick = { showTime = true }) { Icon(Icons.Default.Schedule, "Selecionar horário", tint = SCyan) } },
                     supportingText = { Text("Formato 24 horas • use o relógio para escolher") }, shape = RoundedCornerShape(14.dp)
                 )
-                AnimatedVisibility(validate && (title.isBlank() || !validDate || !validTime), enter = fadeIn() + slideInVertically(), exit = fadeOut()) {
+                AnimatedVisibility(validate && (title.isBlank() || !validDate || !validTime || !futureSchedule), enter = fadeIn() + slideInVertically(), exit = fadeOut()) {
                     Surface(color = Color(0xFF542B38), shape = RoundedCornerShape(12.dp)) {
                         Text(
-                            if (title.isBlank()) "Informe o nome do compromisso." else if (!validDate) "Selecione uma data válida para ativar o lembrete." else "Informe um horário válido.",
+                            if (title.isBlank()) "Informe o nome do compromisso." else if (!validDate) "Selecione uma data válida para ativar o lembrete." else if (!validTime) "Informe um horário válido." else "Escolha uma data e um horário futuros.",
                             color = Color(0xFFFFC5CF), fontSize = 12.sp, modifier = Modifier.padding(12.dp)
                         )
                     }
@@ -99,7 +102,7 @@ internal fun EnhancedAddTaskDialog(
         confirmButton = {
             Button(onClick = {
                 validate = true
-                if (title.isNotBlank() && validDate && validTime) onSave(title.trim(), date, time.trim())
+                if (title.isNotBlank() && validDate && validTime && futureSchedule) onSave(title.trim(), date, time.trim())
             }, colors = ButtonDefaults.buttonColors(containerColor = SBlue), shape = RoundedCornerShape(12.dp)) {
                 Icon(Icons.Default.CheckCircle, null, modifier = Modifier.size(17.dp)); Spacer(Modifier.width(7.dp)); Text("Salvar compromisso")
             }
@@ -249,4 +252,20 @@ private fun scheduleParseDate(value: String): Long? {
 private fun scheduleFormatDate(value: Long): String =
     SimpleDateFormat("yyyy-MM-dd", Locale.US).apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }.format(Date(value))
 private fun scheduleDisplayDate(value: String): String =
-    scheduleParseDate(value)?.let { SimpleDateFormat("dd/MM/yyyy", Locale("pt", "BR")).format(Date(it)) } ?: value
+    scheduleParseDate(value)?.let { SimpleDateFormat("dd/MM/yyyy", Locale("pt", "BR")).apply { timeZone = TimeZone.getTimeZone("UTC") }.format(Date(it)) } ?: value
+
+private fun scheduleIsFuture(date: String, time: String): Boolean {
+    val dateParts = date.split("-").mapNotNull { it.toIntOrNull() }
+    val timeParts = time.split(":").mapNotNull { it.toIntOrNull() }
+    if (dateParts.size != 3 || timeParts.size != 2) return false
+    return try {
+        val candidate = Calendar.getInstance().apply {
+            isLenient = false
+            set(dateParts[0], dateParts[1] - 1, dateParts[2], timeParts[0], timeParts[1], 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+        candidate.timeInMillis > System.currentTimeMillis()
+    } catch (_: Exception) {
+        false
+    }
+}
