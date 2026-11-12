@@ -341,6 +341,7 @@ private fun HomeScreen(tasks: List<OrbitTask>, documentCount: Int, onTasks: () -
                 }
             }
         }
+        item { OrbitProgressPanel(tasks) }
         item { SectionHeader("Acesso rápido", "Atalhos para sua rotina") }
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -362,6 +363,96 @@ private fun HomeScreen(tasks: List<OrbitTask>, documentCount: Int, onTasks: () -
             key = { it.id }
         ) { TaskRow(it, onToggle, null) }
     }
+}
+
+@Composable
+private fun OrbitProgressPanel(tasks: List<OrbitTask>) {
+    val today = orbitPeriodProgress(tasks, "today")
+    val week = orbitPeriodProgress(tasks, "week")
+    val month = orbitPeriodProgress(tasks, "month")
+    val year = orbitPeriodProgress(tasks, "year")
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = OrbitPanel),
+        shape = RoundedCornerShape(22.dp)
+    ) {
+        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.Insights, null, tint = OrbitCyan, modifier = Modifier.size(22.dp))
+                Spacer(Modifier.width(9.dp))
+                Column {
+                    Text("PROGRESSO DOS AGENDAMENTOS", color = OrbitText, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    Text("Concluídos / total • acompanhe sua rotina", color = OrbitMuted, fontSize = 10.sp)
+                }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+                OrbitProgressMetric("Hoje", today, Modifier.weight(1f))
+                OrbitProgressMetric("Semana", week, Modifier.weight(1f))
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+                OrbitProgressMetric("Mês", month, Modifier.weight(1f))
+                OrbitProgressMetric("Ano", year, Modifier.weight(1f))
+            }
+        }
+    }
+}
+
+@Composable
+private fun OrbitProgressMetric(label: String, progress: Pair<Int, Int>, modifier: Modifier = Modifier) {
+    val completed = progress.first
+    val total = progress.second
+    val remaining = (total - completed).coerceAtLeast(0)
+    Column(
+        modifier = modifier
+            .background(OrbitPanel2, RoundedCornerShape(15.dp))
+            .padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        Text(label, color = OrbitMuted, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+        Text("$" + "completed/$" + "total", color = OrbitText, fontSize = 23.sp, fontWeight = FontWeight.ExtraBold)
+        Text("$" + "remaining restantes", color = OrbitCyan, fontSize = 10.sp)
+    }
+}
+
+private fun orbitPeriodProgress(tasks: List<OrbitTask>, period: String): Pair<Int, Int> {
+    val now = Calendar.getInstance()
+    val start = (now.clone() as Calendar).apply {
+        set(Calendar.HOUR_OF_DAY, 0)
+        set(Calendar.MINUTE, 0)
+        set(Calendar.SECOND, 0)
+        set(Calendar.MILLISECOND, 0)
+        when (period) {
+            "week" -> {
+                val firstDay = firstDayOfWeek
+                val offset = (get(Calendar.DAY_OF_WEEK) - firstDay + 7) % 7
+                add(Calendar.DAY_OF_MONTH, -offset)
+            }
+            "month" -> set(Calendar.DAY_OF_MONTH, 1)
+            "year" -> set(Calendar.DAY_OF_YEAR, 1)
+        }
+    }
+    val end = (start.clone() as Calendar).apply {
+        when (period) {
+            "today" -> add(Calendar.DAY_OF_MONTH, 1)
+            "week" -> add(Calendar.DAY_OF_MONTH, 7)
+            "month" -> add(Calendar.MONTH, 1)
+            "year" -> add(Calendar.YEAR, 1)
+        }
+    }
+    val formatter = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply { isLenient = false }
+    val periodTasks = tasks.filter { task ->
+        if (task.dueDate.isBlank()) false
+        else try {
+            val position = java.text.ParsePosition(0)
+            val parsed = formatter.parse(task.dueDate, position)
+            parsed != null && position.index == task.dueDate.length &&
+                parsed.time >= start.timeInMillis && parsed.time < end.timeInMillis
+        } catch (_: Exception) {
+            false
+        }
+    }
+    return periodTasks.count { it.done } to periodTasks.size
 }
 
 @Composable
