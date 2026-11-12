@@ -27,12 +27,28 @@ object OrbitCommandParser {
             .replace(Regex("\\s+"), " ")
             .trim()
 
+    // Vocabulário amplo de intenção: comandos diretos, formas educadas e
+    // expressões comuns usadas para registrar compromissos e pedir alertas.
     private val schedulingKeywords = listOf(
-        "agende", "agendar", "agenda", "marque", "marcar", "crie", "criar",
-        "lembre", "lembrete", "me lembra", "me lembre", "me lembrar",
-        "lembre me", "lembra me", "nao posso esquecer", "nao esquecer",
-        "preciso lembrar", "quero lembrar", "nao deixe eu esquecer",
-        "me avise", "me avisar", "notifique", "notificacao"
+        "agende", "agendar", "agenda", "agendamento", "marque", "marcar",
+        "crie", "criar", "adicione", "adicionar", "inclua", "incluir",
+        "registre", "registrar", "anote", "anotar", "salve", "salvar",
+        "programe", "programar", "planeje", "planejar", "organize", "organizar",
+        "reserve", "reservar", "lembre", "lembrar", "lembrete", "recorde",
+        "recordar", "me lembra", "me lembre", "me lembrar", "lembre me",
+        "lembra me", "nao posso esquecer", "não posso esquecer",
+        "nao esquecer", "não esquecer", "preciso lembrar", "quero lembrar",
+        "nao deixe eu esquecer", "não deixe eu esquecer", "tenho que lembrar",
+        "preciso agendar", "preciso marcar", "quero agendar", "quero marcar",
+        "me avise", "me avisar", "avise", "avisar", "me notifique",
+        "notifique", "notificar", "notificacao", "notificação",
+        "me alerte", "alertar", "alerta", "me informe", "me recorde",
+        "tenho compromisso", "tenho uma consulta", "tenho consulta",
+        "tenho uma reuniao", "tenho reunião", "tenho uma prova", "tenho prova",
+        "tenho uma aula", "tenho aula", "tenho um evento", "tenho evento",
+        "nao posso perder", "não posso perder", "nao posso me atrasar",
+        "não posso me atrasar", "coloque na agenda", "coloca na agenda",
+        "adicionar na agenda", "colocar na agenda"
     )
 
     fun hasSchedulingIntent(command: String): Boolean {
@@ -62,7 +78,7 @@ object OrbitCommandParser {
 
         var title = command.trim()
         title = title.replace(Regex("(?i)^\\s*(por favor[, ]*)?(agende|agendar|agenda|marque|marcar|crie|criar)\\s+"), "")
-        title = title.replace(Regex("(?i)^\\s*(me\\s+lembre|me\\s+lembrar|me\\s+lembra(r)?|lembre\\s*me|lembra\\s*me|lembrete|preciso\\s+lembrar|quero\\s+lembrar|nao\\s+posso\\s+esquecer|nao\\s+esquecer|nao\\s+deixe\\s+eu\\s+esquecer)\\s+(de\\s+)?"), "")
+        title = title.replace(Regex("(?i)^\\s*(me\\s+lembre|me\\s+lembrar|me\\s+lembra(r)?|lembre\\s*me|lembra\\s*me|lembrete|preciso\\s+lembrar|quero\\s+lembrar|nao\\s+posso\\s+esquecer|não\\s+posso\\s+esquecer|nao\\s+esquecer|não\\s+esquecer|nao\\s+deixe\\s+eu\\s+esquecer|não\\s+deixe\\s+eu\\s+esquecer)\\s+(de\\s+)?"), "")
         title = title.replace(Regex("(?i)\\bdepois\\s+de\\s+amanh[ãa]\\b"), "")
         title = title.replace(Regex("(?i)\\b(hoje|amanh[ãa]|segunda(-feira)?|ter[cç]a(-feira)?|quarta(-feira)?|quinta(-feira)?|sexta(-feira)?|s[áa]bado|domingo)\\b"), "")
         title = title.replace(Regex("\\b\\d{1,2}/\\d{1,2}(/\\d{2,4})?\\b"), "")
