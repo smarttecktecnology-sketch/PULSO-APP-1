@@ -264,8 +264,8 @@ private fun OrbitApp() {
             EnhancedAddTaskDialog(
                 onDismiss = { showTaskDialog = false; editingTask = null },
                 initialTask = taskBeingEdited
-            ) { title, date, time ->
-                if (taskBeingEdited == null) addTask(title, date, time)
+            ) { title, date, time, recurrence ->
+                if (taskBeingEdited == null) addTask(title, date, time, recurrence = recurrence)
                 else updateTask(taskBeingEdited.copy(title = title.trim(), dueDate = date.trim(), reminderTime = time))
                 showTaskDialog = false
                 editingTask = null
