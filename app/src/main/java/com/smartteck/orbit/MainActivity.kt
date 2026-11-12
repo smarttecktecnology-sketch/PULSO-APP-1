@@ -1,5 +1,6 @@
 package com.smartteck.orbit
 
+import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -79,6 +80,23 @@ private fun OrbitApp() {
     var showTaskDialog by remember { mutableStateOf(false) }
     var editingTask by remember { mutableStateOf<OrbitTask?>(null) }
     var showAssistant by remember { mutableStateOf(false) }
+    var showPremium by remember { mutableStateOf(false) }
+    var premiumActive by remember { mutableStateOf(false) }
+    var premiumPrice by remember { mutableStateOf<String?>(null) }
+    var premiumStatus by remember { mutableStateOf("Preparando assinatura do Google Play…") }
+    var premiumProductReady by remember { mutableStateOf(false) }
+    val billingManager = remember(context) {
+        OrbitBillingManager(context) { active, status, price, ready ->
+            premiumActive = active
+            premiumStatus = status
+            premiumPrice = price
+            premiumProductReady = ready
+        }
+    }
+    DisposableEffect(billingManager) {
+        billingManager.connect()
+        onDispose { billingManager.close() }
+    }
     val notificationPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
     LaunchedEffect(Unit) {
         createOrbitNotificationChannel(context)
@@ -142,7 +160,10 @@ private fun OrbitApp() {
                             }
                         }
                     },
-                    actions = { IconButton(onClick = { showAssistant = true }) { Icon(Icons.Default.AutoAwesome, "Assistente ORBIT", tint = OrbitCyan) } },
+                    actions = {
+                        IconButton(onClick = { showPremium = true }) { Icon(Icons.Default.WorkspacePremium, "SMART ORBIT Premium", tint = Color(0xFFFFD166)) }
+                        IconButton(onClick = { showAssistant = true }) { Icon(Icons.Default.AutoAwesome, "Assistente ORBIT", tint = OrbitCyan) }
+                    },
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = OrbitBg)
                 )
             },
@@ -193,6 +214,19 @@ private fun OrbitApp() {
             tasks = tasks,
             onDismiss = { showAssistant = false },
             onCreateTask = { title -> addTask(title, "", "09:00") }
+        )
+        if (showPremium) OrbitPremiumDialog(
+            isPremium = premiumActive,
+            price = premiumPrice,
+            status = premiumStatus,
+            productReady = premiumProductReady,
+            onRefresh = { billingManager.refreshPurchases() },
+            onPurchase = {
+                val activity = context as? Activity
+                if (activity != null) billingManager.launchPurchase(activity)
+                else premiumStatus = "Não foi possível abrir a compra nesta tela."
+            },
+            onDismiss = { showPremium = false }
         )
         }
     }
