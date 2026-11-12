@@ -12,7 +12,7 @@ import com.android.billingclient.api.QueryProductDetailsParams
 import com.android.billingclient.api.QueryPurchasesParams
 
 /**
- * Google Play subscription client. No private backend/server is used.
+ * Google Play subscription client for the highest AI plan. No private backend/server is used.
  * Product ID must match a subscription created in Play Console.
  */
 class OrbitBillingManager(
@@ -20,7 +20,7 @@ class OrbitBillingManager(
     private val onState: (active: Boolean, status: String, price: String?, productReady: Boolean) -> Unit
 ) {
     companion object {
-        const val PREMIUM_PRODUCT_ID = "orbit_premium_monthly"
+        const val PREMIUM_PRODUCT_ID = "orbit_ai_max_monthly"
     }
 
     private val appContext = context.applicationContext
