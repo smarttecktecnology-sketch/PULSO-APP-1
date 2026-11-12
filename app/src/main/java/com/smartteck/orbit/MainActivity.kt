@@ -572,8 +572,10 @@ private fun AssistantDialog(
                 "\n• " + reminderDescription +
                 "\n\nConfira e confirme para salvar."
             prompt = ""
+        } else if (OrbitCommandParser.hasSchedulingIntent(question) && !OrbitCommandParser.hasExplicitTime(question)) {
+            answer = "por favor defina o horário do lembrete"
         } else if (OrbitCommandParser.hasSchedulingIntent(question)) {
-            answer = "Não consegui identificar todos os dados. Escreva o compromisso com uma data e um horário, por exemplo: “Me lembre de estudar amanhã às 19h”. O horário é obrigatório."
+            answer = "Não consegui identificar a data do compromisso. Informe a data e tente novamente."
         } else {
             answer = "Eu cuido somente dos seus compromissos e lembretes. Escreva o que deseja lembrar, incluindo a data e o horário."
         }
@@ -595,14 +597,14 @@ private fun AssistantDialog(
                             val draft = proposedSchedule ?: return@Button
                             onCreateTask(draft.title, draft.date, draft.time, draft.reminderLeadMinutes)
                             proposedSchedule = null
-                            answer = "Compromisso salvo! A notificação e o aviso falado foram programados no aparelho."
+                            answer = "COMPROMISSO AGENDADO. A notificação e o aviso falado foram programados."
                         },
                         modifier = Modifier.fillMaxWidth(),
                         colors = ButtonDefaults.buttonColors(containerColor = OrbitBlue)
                     ) {
                         Icon(Icons.Default.NotificationsActive, null)
                         Spacer(Modifier.width(6.dp))
-                        Text("Confirmar compromisso")
+                        Text("CONFIRMAR AGENDAMENTO DO COMPROMISSO")
                     }
                 }
                 OutlinedTextField(
