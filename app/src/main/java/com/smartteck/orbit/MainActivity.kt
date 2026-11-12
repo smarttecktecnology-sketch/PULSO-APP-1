@@ -135,10 +135,11 @@ private fun OrbitApp() {
 
     fun addTask(title: String, date: String, time: String, leadMinutes: Int = 0, recurrence: String = "once") {
         val dates = orbitRecurrenceDates(date.trim(), recurrence)
+        val firstAvailableId = nextOrbitTaskId(tasks.map { it.id })
         val newTasks = dates.mapIndexedNotNull { index, occurrenceDate ->
             val conflict = tasks.any { !it.done && it.dueDate == occurrenceDate && it.reminderTime == time.trim() }
             if (conflict) null else OrbitTask(
-                System.currentTimeMillis() + index,
+                firstAvailableId + index,
                 title.trim(),
                 occurrenceDate,
                 false,
