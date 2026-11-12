@@ -601,6 +601,26 @@ private fun AssistantDialog(
                 val todayCount = pending.count { it.dueDate == today }
                 "Resumo do ORBIT:\n• ${pending.size} pendente(s)\n• $completed concluída(s)\n• $overdue atrasada(s)\n• $todayCount para hoje\n• ${tasks.size} tarefa(s) no total."
             }
+            normalized.contains("semana") -> {
+                val weekStart = Calendar.getInstance().apply {
+                    val daysSinceMonday = (get(Calendar.DAY_OF_WEEK) + 5) % 7
+                    add(Calendar.DAY_OF_YEAR, -daysSinceMonday)
+                    set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0)
+                    set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
+                }
+                val weekEnd = (weekStart.clone() as Calendar).apply { add(Calendar.DAY_OF_YEAR, 7) }
+                val startIso = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(weekStart.time)
+                val endIso = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(weekEnd.time)
+                val formatter = SimpleDateFormat("EEE, dd/MM", Locale("pt", "BR"))
+                val itemsWeek = pending.filter { it.dueDate >= startIso && it.dueDate < endIso }
+                    .sortedWith(compareBy<OrbitTask>({ it.dueDate }, { it.reminderTime }))
+                if (itemsWeek.isEmpty()) "Você não tem tarefas pendentes com data marcada nesta semana."
+                else "Sua semana (" + formatter.format(weekStart.time) + " a " + formatter.format((weekEnd.clone() as Calendar).apply { add(Calendar.DAY_OF_YEAR, -1) }.time) + "):\n" +
+                    itemsWeek.joinToString("\n") { task ->
+                        val day = try { formatter.format(SimpleDateFormat("yyyy-MM-dd", Locale.US).parse(task.dueDate)!!) } catch (_: Exception) { task.dueDate }
+                        "• " + day + " às " + task.reminderTime + " — " + task.title
+                    }
+            }
             normalized.contains("amanha") -> {
                 val tomorrow = Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, 1) }
                 val tomorrowIso = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(tomorrow.time)
@@ -652,7 +672,7 @@ private fun AssistantDialog(
                 else "Tarefas concluídas:\n" + completed.take(8).joinToString("\n") { "• ${it.title}" }
             }
             normalized.contains("ajuda") || normalized == "oi" || normalized == "ola" ->
-                "Você pode me pedir:\n• resumo das tarefas\n• o que tenho para hoje?\n• mostrar atrasadas\n• priorizar meu dia\n• buscar: estudo\n• criar tarefa: estudar matemática\n• agendar reunião amanhã às 15h\n• agendar academia sexta às 18h\n• agendar prova amanhã às 10h e me lembrar 30 minutos antes"
+                "Você pode me pedir:\n• resumo das tarefas\n• o que tenho para hoje?\n• o que tenho esta semana?\n• mostrar atrasadas\n• priorizar meu dia\n• buscar: estudo\n• criar tarefa: estudar matemática\n• agendar reunião amanhã às 15h\n• agendar academia sexta às 18h\n• agendar prova amanhã às 10h e me lembrar 30 minutos antes"
             else ->
                 "Ainda não reconheço esse pedido. Estou funcionando totalmente no aparelho, sem servidor e sem internet. Toque em Ajuda para ver os comandos disponíveis."
         }
