@@ -77,8 +77,14 @@ object OrbitCommandParser {
         }
 
         var title = command.trim()
-        title = title.replace(Regex("(?i)^\\s*(por favor[, ]*)?(agende|agendar|agenda|marque|marcar|crie|criar)\\s+"), "")
-        title = title.replace(Regex("(?i)^\\s*(me\\s+lembre|me\\s+lembrar|me\\s+lembra(r)?|lembre\\s*me|lembra\\s*me|lembrete|preciso\\s+lembrar|quero\\s+lembrar|nao\\s+posso\\s+esquecer|não\\s+posso\\s+esquecer|nao\\s+esquecer|não\\s+esquecer|nao\\s+deixe\\s+eu\\s+esquecer|não\\s+deixe\\s+eu\\s+esquecer)\\s+(de\\s+)?"), "")
+        title = title.replace(
+            Regex("(?i)^\\s*(por favor[, ]*)?(agende|agendar|agenda|agendamento|marque|marcar|crie|criar|adicione|adicionar|inclua|incluir|registre|registrar|anote|anotar|salve|salvar|programe|programar|planeje|planejar|organize|organizar|reserve|reservar)\\s+"),
+            ""
+        )
+        title = title.replace(
+            Regex("(?i)^\\s*(tenho compromisso|tenho uma consulta|tenho consulta|tenho uma reuniao|tenho reuniao|tenho uma prova|tenho prova|tenho uma aula|tenho aula|tenho um evento|tenho evento|me avise|me avisar|avise|avisar|me notifique|notifique|me alerte|alerta|me informe|me recorde|me lembre|me lembrar|me lembra(r)?|lembre\\s*me|lembra\\s*me|lembrete|preciso\\s+lembrar|quero\\s+lembrar|nao\\s+posso\\s+esquecer|nao\\s+esquecer|nao\\s+deixe\\s+eu\\s+esquecer)\\s+(de\\s+)?"),
+            ""
+        )
         title = title.replace(Regex("(?i)\\bdepois\\s+de\\s+amanh[ãa]\\b"), "")
         title = title.replace(Regex("(?i)\\b(hoje|amanh[ãa]|segunda(-feira)?|ter[cç]a(-feira)?|quarta(-feira)?|quinta(-feira)?|sexta(-feira)?|s[áa]bado|domingo)\\b"), "")
         title = title.replace(Regex("\\b\\d{1,2}/\\d{1,2}(/\\d{2,4})?\\b"), "")
