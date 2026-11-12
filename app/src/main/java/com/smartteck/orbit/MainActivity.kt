@@ -96,10 +96,6 @@ private fun OrbitApp() {
             maxPrice = max
             plusReady = plusIsReady
             maxReady = maxIsReady
-            if (tier == OrbitPlanTier.FREE && voiceRemindersEnabled) {
-                voiceRemindersEnabled = false
-                context.getSharedPreferences("orbit_settings", Context.MODE_PRIVATE).edit().putBoolean("voice_reminders", false).apply()
-            }
         }
     }
     DisposableEffect(billingManager) {
