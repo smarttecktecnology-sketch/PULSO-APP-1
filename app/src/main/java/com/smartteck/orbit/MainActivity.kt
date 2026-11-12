@@ -225,7 +225,6 @@ private fun OrbitApp() {
             }
         }
         if (showAssistant && premiumActive) AssistantDialog(
-            tasks = tasks,
             onDismiss = { showAssistant = false },
             onCreateTask = { title, date, time, lead -> addTask(title, date, time, lead) }
         )
@@ -546,146 +545,48 @@ private fun formatOrbitDateMillis(value: Long): String =
 
 @Composable
 private fun AssistantDialog(
-    tasks: List<OrbitTask>,
     onDismiss: () -> Unit,
     onCreateTask: (String, String, String, Int) -> Unit
 ) {
     var prompt by remember { mutableStateOf("") }
-    var answer by remember { mutableStateOf("Olá! Sou o assistente local do ORBIT. Posso consultar, pesquisar e organizar suas tarefas sem internet.") }
-    var proposedTask by remember { mutableStateOf<String?>(null) }
+    var answer by remember {
+        mutableStateOf("Olá! Escreva um compromisso com data e horário. Eu identifico as informações e programo o lembrete.")
+    }
     var proposedSchedule by remember { mutableStateOf<OrbitScheduleDraft?>(null) }
-
-    fun normalize(value: String): String =
-        java.text.Normalizer.normalize(value.lowercase(Locale("pt", "BR")), java.text.Normalizer.Form.NFD)
-            .replace(Regex("\\p{Mn}+"), "").trim()
 
     fun processPrompt() {
         val question = prompt.trim()
         if (question.isBlank()) return
-        val normalized = normalize(question)
-        val pending = tasks.filter { !it.done }
-        val today = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
-        proposedTask = null
-        proposedSchedule = null
-        val scheduleDraft = OrbitCommandParser.parseSchedule(question)
-        if (scheduleDraft != null) {
-            proposedSchedule = scheduleDraft
-            val reminderDescription = if (scheduleDraft.reminderLeadMinutes > 0) "lembrete ${scheduleDraft.reminderLeadMinutes} minutos antes" else "lembrete no horário marcado"
-            answer = "Entendi este agendamento:\n• ${scheduleDraft.title}\n• ${scheduleDraft.date} às ${scheduleDraft.time}\n• $reminderDescription.\nConfirme abaixo para salvar no aparelho."
-            prompt = ""
-            return
-        }
-        val scheduleIntent = OrbitCommandParser.hasSchedulingIntent(question)
-        if (scheduleIntent) {
-            answer = "Consigo fazer isso! Informe a data e o horário. Exemplo: “Agende reunião amanhã às 15h e me lembre 30 minutos antes”."
-            prompt = ""
-            return
-        }
 
-        answer = when {
-            normalized.startsWith("criar tarefa:") ||
-                normalized.startsWith("adicionar tarefa:") ||
-                normalized.startsWith("nova tarefa:") -> {
-                val title = question.substringAfter(':').trim()
-                if (title.isBlank()) "Escreva o nome da tarefa depois dos dois-pontos."
-                else {
-                    proposedTask = title
-                    "Preparei “$title”. Confira o nome e confirme para adicionar à sua lista."
-                }
+        proposedSchedule = null
+        val draft = OrbitCommandParser.parseSchedule(question)
+        if (draft != null) {
+            proposedSchedule = draft
+            val reminderDescription = if (draft.reminderLeadMinutes > 0) {
+                "aviso " + draft.reminderLeadMinutes + " minutos antes"
+            } else {
+                "aviso no horário do compromisso"
             }
-            normalized.contains("resumo") || normalized.contains("quantas") ||
-                normalized.contains("situacao") || normalized.contains("pendentes") -> {
-                val completed = tasks.count { it.done }
-                val overdue = pending.count { it.dueDate.length == 10 && it.dueDate < today }
-                val todayCount = pending.count { it.dueDate == today }
-                "Resumo do ORBIT:\n• ${pending.size} pendente(s)\n• $completed concluída(s)\n• $overdue atrasada(s)\n• $todayCount para hoje\n• ${tasks.size} tarefa(s) no total."
-            }
-            normalized.contains("semana") -> {
-                val weekStart = Calendar.getInstance().apply {
-                    val daysSinceMonday = (get(Calendar.DAY_OF_WEEK) + 5) % 7
-                    add(Calendar.DAY_OF_YEAR, -daysSinceMonday)
-                    set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0)
-                    set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
-                }
-                val weekEnd = (weekStart.clone() as Calendar).apply { add(Calendar.DAY_OF_YEAR, 7) }
-                val startIso = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(weekStart.time)
-                val endIso = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(weekEnd.time)
-                val formatter = SimpleDateFormat("EEE, dd/MM", Locale("pt", "BR"))
-                val itemsWeek = pending.filter { it.dueDate >= startIso && it.dueDate < endIso }
-                    .sortedWith(compareBy<OrbitTask>({ it.dueDate }, { it.reminderTime }))
-                if (itemsWeek.isEmpty()) "Você não tem tarefas pendentes com data marcada nesta semana."
-                else "Sua semana (" + formatter.format(weekStart.time) + " a " + formatter.format((weekEnd.clone() as Calendar).apply { add(Calendar.DAY_OF_YEAR, -1) }.time) + "):\n" +
-                    itemsWeek.joinToString("\n") { task ->
-                        val day = try { formatter.format(SimpleDateFormat("yyyy-MM-dd", Locale.US).parse(task.dueDate)!!) } catch (_: Exception) { task.dueDate }
-                        "• " + day + " às " + task.reminderTime + " — " + task.title
-                    }
-            }
-            normalized.contains("amanha") -> {
-                val tomorrow = Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, 1) }
-                val tomorrowIso = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(tomorrow.time)
-                val itemsTomorrow = pending.filter { it.dueDate == tomorrowIso }
-                if (itemsTomorrow.isEmpty()) "Você não tem compromissos pendentes para amanhã."
-                else "Agenda de amanhã:\n" + itemsTomorrow.joinToString("\n") { "• ${it.title} — ${it.reminderTime}" }
-            }
-            normalized.contains("hoje") -> {
-                val todays = pending.filter { it.dueDate == today }
-                if (todays.isEmpty()) "Você não tem tarefas pendentes com data marcada para hoje."
-                else "Tarefas de hoje:\n" + todays.joinToString("\n") { "• ${it.title} — ${it.reminderTime}" }
-            }
-            normalized.contains("atrasad") -> {
-                val overdue = pending.filter { it.dueDate.length == 10 && it.dueDate < today }
-                if (overdue.isEmpty()) "Você não tem tarefas atrasadas."
-                else "Estas tarefas estão atrasadas:\n" + overdue.joinToString("\n") { "• ${it.title} — ${it.dueDate}" }
-            }
-            normalized.startsWith("buscar:") || normalized.startsWith("procurar:") ||
-                normalized.startsWith("encontrar:") -> {
-                val term = normalize(question.substringAfter(':'))
-                val matches = tasks.filter { normalize(it.title).contains(term) }
-                if (term.isBlank()) "Digite o que deseja procurar depois de “buscar:”."
-                else if (matches.isEmpty()) "Não encontrei nenhuma tarefa com esse termo."
-                else "Encontrei ${matches.size} resultado(s):\n" + matches.take(8).joinToString("\n") {
-                    "• ${it.title} — " + if (it.done) "concluída" else "pendente"
-                }
-            }
-            normalized.contains("priorizar") || normalized.contains("organizar") ||
-                normalized.contains("meu dia") || normalized.contains("proxima tarefa") -> {
-                val ordered = pending.sortedWith(compareBy<OrbitTask>(
-                    { if (it.dueDate.length == 10 && it.dueDate < today) 0 else if (it.dueDate.isBlank()) 2 else 1 },
-                    { if (it.dueDate.isBlank()) "9999-99-99" else it.dueDate },
-                    { it.reminderTime }
-                )).take(5)
-                if (ordered.isEmpty()) "Não há tarefas pendentes. Seu painel está livre!"
-                else "Sugestão de prioridades:\n" + ordered.mapIndexed { index, task ->
-                    val status = when {
-                        task.dueDate.length == 10 && task.dueDate < today -> " • atrasada"
-                        task.dueDate == today -> " • hoje às ${task.reminderTime}"
-                        task.dueDate.isNotBlank() -> " • ${task.dueDate}"
-                        else -> " • sem data"
-                    }
-                    "${index + 1}. ${task.title}$status"
-                }.joinToString("\n")
-            }
-            normalized.contains("concluid") || normalized.contains("finalizad") -> {
-                val completed = tasks.filter { it.done }
-                if (completed.isEmpty()) "Ainda não há tarefas concluídas."
-                else "Tarefas concluídas:\n" + completed.take(8).joinToString("\n") { "• ${it.title}" }
-            }
-            normalized.contains("ajuda") || normalized == "oi" || normalized == "ola" ->
-                "Você pode me pedir:\n• resumo das tarefas\n• o que tenho para hoje?\n• o que tenho esta semana?\n• mostrar atrasadas\n• priorizar meu dia\n• buscar: estudo\n• criar tarefa: estudar matemática\n• agendar reunião amanhã às 15h\n• agendar academia sexta às 18h\n• agendar prova amanhã às 10h e me lembrar 30 minutos antes"
-            else ->
-                "Ainda não reconheço esse pedido. Estou funcionando totalmente no aparelho, sem servidor e sem internet. Toque em Ajuda para ver os comandos disponíveis."
+            answer = "Entendi o compromisso:\n• " + draft.title +
+                "\n• " + draft.date + " às " + draft.time +
+                "\n• " + reminderDescription +
+                "\n\nConfira e confirme para salvar."
+            prompt = ""
+        } else if (OrbitCommandParser.hasSchedulingIntent(question)) {
+            answer = "Não consegui identificar todos os dados. Escreva o compromisso com uma data e um horário, por exemplo: “Me lembre de estudar amanhã às 19h”. O horário é obrigatório."
+        } else {
+            answer = "Eu cuido somente dos seus compromissos e lembretes. Escreva o que deseja lembrar, incluindo a data e o horário."
         }
-        prompt = ""
     }
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        icon = { Icon(Icons.Default.AutoAwesome, null, tint = OrbitCyan, modifier = Modifier.size(34.dp)) },
-        title = { Text("Assistente ORBIT", fontWeight = FontWeight.Bold) },
+        icon = { Icon(Icons.Default.NotificationsActive, null, tint = OrbitCyan, modifier = Modifier.size(34.dp)) },
+        title = { Text("Assistente de lembretes", fontWeight = FontWeight.Bold) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(11.dp)) {
                 Surface(color = OrbitBlue.copy(alpha = .13f), shape = RoundedCornerShape(12.dp)) {
-                    Text("100% LOCAL • OFFLINE", color = OrbitCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp))
+                    Text("INTERPRETAÇÃO LOCAL • SEM API", color = OrbitCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp))
                 }
                 Text(answer, color = OrbitText, fontSize = 13.sp)
                 if (proposedSchedule != null) {
@@ -694,47 +595,57 @@ private fun AssistantDialog(
                             val draft = proposedSchedule ?: return@Button
                             onCreateTask(draft.title, draft.date, draft.time, draft.reminderLeadMinutes)
                             proposedSchedule = null
-                            answer = "Agendamento salvo! O lembrete foi programado no celular."
+                            answer = "Compromisso salvo! A notificação e o aviso falado foram programados no aparelho."
                         },
                         modifier = Modifier.fillMaxWidth(),
                         colors = ButtonDefaults.buttonColors(containerColor = OrbitBlue)
-                    ) { Icon(Icons.Default.CalendarMonth, null); Spacer(Modifier.width(6.dp)); Text("Confirmar agendamento") }
-                }
-                if (proposedTask != null) {
-                    Button(
-                        onClick = {
-                            onCreateTask(proposedTask!!, "", "09:00", 0)
-                            proposedTask = null
-                            answer = "Tarefa adicionada. Você pode definir a data e o horário do lembrete na tela Tarefas."
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(containerColor = OrbitBlue)
-                    ) { Icon(Icons.Default.Add, null); Spacer(Modifier.width(6.dp)); Text("Confirmar e adicionar") }
+                    ) {
+                        Icon(Icons.Default.NotificationsActive, null)
+                        Spacer(Modifier.width(6.dp))
+                        Text("Confirmar compromisso")
+                    }
                 }
                 OutlinedTextField(
                     value = prompt,
-                    onValueChange = { prompt = it },
+                    onValueChange = {
+                        prompt = it
+                        proposedSchedule = null
+                    },
                     modifier = Modifier.fillMaxWidth(),
-                    label = { Text("Converse com o ORBIT") },
-                    placeholder = { Text("Ex.: priorizar meu dia") },
+                    label = { Text("Escreva seu compromisso") },
+                    placeholder = { Text("Ex.: Reunião amanhã às 15:30") },
                     minLines = 2,
                     maxLines = 4
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(onClick = {
-                        proposedTask = null
-                        proposedSchedule = null
-                        answer = "Comandos disponíveis:\n• resumo das tarefas\n• o que tenho para hoje?\n• o que tenho amanhã?\n• mostrar atrasadas\n• priorizar meu dia\n• buscar: palavra\n• criar tarefa: nome\n• agendar reunião amanhã às 15h\n• agendar prova sexta às 10h e me lembrar 30 minutos antes"
-                    }, modifier = Modifier.weight(1f)) { Text("Ajuda") }
-                    Button(onClick = { processPrompt() }, enabled = prompt.isNotBlank(), modifier = Modifier.weight(1f)) {
-                        Icon(Icons.Default.Send, null); Spacer(Modifier.width(7.dp)); Text("Enviar")
+                    OutlinedButton(
+                        onClick = {
+                            proposedSchedule = null
+                            answer = "Exemplos:\n• Me lembre de estudar amanhã às 19h\n• Reunião sexta-feira às 14:30\n• Consulta 20/11/2026 às 09h, com aviso 30 minutos antes\n\nInforme sempre a data e o horário."
+                        },
+                        modifier = Modifier.weight(1f)
+                    ) { Text("Exemplos") }
+                    Button(
+                        onClick = { processPrompt() },
+                        enabled = prompt.isNotBlank(),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(Icons.Default.Send, null)
+                        Spacer(Modifier.width(7.dp))
+                        Text("Interpretar")
                     }
                 }
-                Text("Seus dados permanecem no aparelho. O assistente usa comandos locais; não envia suas tarefas para a internet.", color = OrbitMuted, fontSize = 10.sp)
+                Text(
+                    "O assistente apenas interpreta compromissos e programa notificações e avisos por voz. Os comandos são processados no aparelho.",
+                    color = OrbitMuted,
+                    fontSize = 10.sp
+                )
             }
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text("Fechar") } },
-        containerColor = OrbitPanel, titleContentColor = OrbitText, textContentColor = OrbitText
+        containerColor = OrbitPanel,
+        titleContentColor = OrbitText,
+        textContentColor = OrbitText
     )
 }
 
