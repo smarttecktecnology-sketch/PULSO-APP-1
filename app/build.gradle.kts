@@ -16,10 +16,10 @@ android {
     }
     flavorDimensions += "edition"
     productFlavors {
-        create("test") {
+        create("trial") {
             dimension = "edition"
-            applicationIdSuffix = ".test"
-            versionNameSuffix = "-test"
+            applicationIdSuffix = ".trial"
+            versionNameSuffix = "-trial"
             buildConfigField("boolean", "ORBIT_TEST_MODE", "true")
         }
         create("official") {
