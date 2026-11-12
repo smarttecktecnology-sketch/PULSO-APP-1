@@ -54,6 +54,25 @@ object OrbitCommandParser {
         "adicionar na agenda", "colocar na agenda"
     )
 
+    /**
+     * Extracts a clean commitment label from a natural-language request.
+     * Date and time are still selected explicitly in the guided UI.
+     */
+    fun suggestTitle(command: String): String {
+        var title = command.trim()
+        title = title.replace(
+            Regex("(?i)^\\s*(por favor[, ]*)?(agende|agendar|marque|marcar|crie|criar|adicione|adicionar|anote|anotar|lembre|lembrar|me lembre|me lembra|me avise|avise|preciso lembrar de|quero lembrar de)\\s+"),
+            ""
+        )
+        title = title.replace(Regex("(?i)\\b(depois de amanha|amanha|hoje|segunda(-feira)?|terca(-feira)?|quarta(-feira)?|quinta(-feira)?|sexta(-feira)?|sabado|domingo)\\b"), "")
+        title = title.replace(Regex("(?i)\\b(?:dia\\s+)?\\d{1,2}\\s+de\\s+(janeiro|fevereiro|marco|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro)(?:\\s+de\\s+\\d{4})?\\b"), "")
+        title = title.replace(Regex("\\b\\d{1,2}/\\d{1,2}(?:/\\d{2,4})?\\b"), "")
+        title = title.replace(Regex("(?i)\\b(?:as?|para as?)\\s*\\d{1,2}(?::\\d{2}|h\\d{0,2}|\\s*horas?)\\b(?:\\s+da\\s+(?:manha|tarde|noite))?"), "")
+        title = title.replace(Regex("(?i)\\b\\d{1,2}h\\d{0,2}\\b"), "")
+        title = title.replace(Regex("[,.;:!?]+"), " ").replace(Regex("\\s+"), " ").trim(' ', '-', 'e')
+        return title.ifBlank { command.trim() }.replaceFirstChar { if (it.isLowerCase()) it.titlecase(pt) else it.toString() }
+    }
+
     fun hasSchedulingIntent(command: String): Boolean {
         val normalized = normalize(command)
         return schedulingKeywords.any { normalized.contains(it) }
