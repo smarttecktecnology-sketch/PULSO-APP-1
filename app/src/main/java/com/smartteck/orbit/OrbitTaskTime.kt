@@ -65,3 +65,11 @@ internal fun orbitRecurrenceDates(date: String, recurrence: String, count: Int =
         parser.format(occurrence.time)
     }
 }
+
+
+/** Returns an ID that is unique against all existing task IDs, even when
+ * multiple tasks are created within the same millisecond. */
+internal fun nextOrbitTaskId(existingIds: Collection<Long>, nowMillis: Long = System.currentTimeMillis()): Long {
+    val afterExisting = existingIds.maxOrNull()?.let { if (it == Long.MAX_VALUE) it else it + 1L } ?: Long.MIN_VALUE
+    return maxOf(nowMillis, afterExisting)
+}
