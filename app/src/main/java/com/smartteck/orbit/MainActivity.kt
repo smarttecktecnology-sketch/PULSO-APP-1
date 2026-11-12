@@ -9,6 +9,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -80,6 +81,15 @@ private fun OrbitApp() {
         createOrbitNotificationChannel(context)
         if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
             notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
+
+    // Recria os lembretes das tarefas pendentes ao abrir o app.
+    // O WorkManager mantém os trabalhos já agendados entre reinicializações.
+    LaunchedEffect(tasks) {
+        tasks.forEach { task ->
+            if (task.done) cancelOrbitReminder(context, task.id)
+            else scheduleOrbitReminder(context, task)
         }
     }
 
@@ -432,9 +442,10 @@ private fun EmptyState(title: String, subtitle: String, icon: androidx.compose.u
 
 private fun scheduleOrbitReminder(context: Context, task: OrbitTask) {
     if (task.dueDate.isBlank() || task.done) return
-    val parsed = try {
-        SimpleDateFormat("yyyy-MM-dd", Locale.US).apply { isLenient = false }.parse(task.dueDate)
-    } catch (_: Exception) { null } ?: return
+    val parser = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply { isLenient = false }
+    val position = java.text.ParsePosition(0)
+    val parsed = try { parser.parse(task.dueDate, position) } catch (_: Exception) { null }
+    if (parsed == null || position.index != task.dueDate.length) return
     val now = Calendar.getInstance()
     val timeParts = task.reminderTime.split(":")
     if (timeParts.size != 2) return
