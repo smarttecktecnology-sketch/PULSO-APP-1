@@ -357,8 +357,7 @@ private fun HomeScreen(activeTier: OrbitPlanTier, tasks: List<OrbitTask>, docume
         }
         if (tasks.none { !it.done }) item { EmptyState("Tudo tranquilo por aqui", "Adicione uma tarefa pelo botão + para começar.", Icons.Default.CheckCircle) }
         else items(
-            tasks.filter { !it.done }
-                .sortedWith(compareBy<OrbitTask>({ if (it.dueDate.isBlank()) "9999-99-99" else it.dueDate }, { it.reminderTime }))
+            OrbitTaskTime.sortByDueDate(tasks.filter { !it.done })
                 .take(4),
             key = { it.id }
         ) { TaskRow(it, onToggle, null) }
@@ -472,7 +471,7 @@ private fun TasksScreen(tasks: List<OrbitTask>, onToggle: (OrbitTask) -> Unit, o
 
 @Composable
 private fun AgendaScreen(tasks: List<OrbitTask>) {
-    val dated = tasks.filter { it.dueDate.isNotBlank() }.sortedBy { it.dueDate }
+    val dated = OrbitTaskTime.sortByDueDate(tasks.filter { it.dueDate.isNotBlank() })
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item { Text("Sua agenda", color = OrbitText, fontSize = 27.sp, fontWeight = FontWeight.Bold); Text("Datas importantes ligadas às suas tarefas.", color = OrbitMuted, fontSize = 13.sp) }
         item {
@@ -539,15 +538,14 @@ private fun FilesScreen(documents: List<OrbitDocument>, onAdd: () -> Unit, onDel
 
 @Composable
 private fun TaskRow(task: OrbitTask, onToggle: (OrbitTask) -> Unit, onDelete: ((OrbitTask) -> Unit)?, showToggle: Boolean = true, onEdit: ((OrbitTask) -> Unit)? = null) {
-    val todayIso = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
-    val overdue = !task.done && task.dueDate.isNotBlank() && task.dueDate.length == 10 && task.dueDate < todayIso
+    val overdue = OrbitTaskTime.isOverdue(task)
     Card(colors = CardDefaults.cardColors(containerColor = OrbitPanel), shape = RoundedCornerShape(16.dp)) {
         Row(Modifier.fillMaxWidth().padding(start = 12.dp, end = 6.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             if (showToggle) Checkbox(task.done, { onToggle(task) }, colors = CheckboxDefaults.colors(checkedColor = OrbitGreen, uncheckedColor = OrbitMuted))
             else Icon(Icons.Default.Event, null, tint = OrbitCyan, modifier = Modifier.padding(horizontal = 12.dp))
             Column(Modifier.weight(1f).padding(vertical = 7.dp)) {
                 Text(task.title, color = if (task.done) OrbitMuted else OrbitText, fontWeight = FontWeight.SemiBold)
-                if (task.dueDate.isNotBlank()) Text("Data: ${task.dueDate} • ${task.reminderTime}" + if (task.reminderLeadMinutes > 0) " • aviso ${task.reminderLeadMinutes} min antes" else " • aviso no horário", color = OrbitMuted, fontSize = 11.sp)
+                if (task.dueDate.isNotBlank()) Text("Data: ${OrbitTaskTime.displayDate(task.dueDate)} • ${task.reminderTime}" + if (task.reminderLeadMinutes > 0) " • aviso ${task.reminderLeadMinutes} min antes" else " • aviso no horário", color = OrbitMuted, fontSize = 11.sp)
                 if (overdue) Text("Atrasada — precisa de atenção", color = Color(0xFFFF8A80), fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
             }
             if (onEdit != null) IconButton(onClick = { onEdit(task) }) { Icon(Icons.Default.Edit, "Editar tarefa", tint = OrbitCyan) }
