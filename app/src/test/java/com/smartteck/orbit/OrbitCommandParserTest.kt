@@ -78,4 +78,26 @@ class OrbitCommandParserTest {
         assertNull(OrbitCommandParser.parseSchedule("Agende estudar amanhã"))
     }
 
+    @Test
+    fun recognizesSchedulingKeywordsInsideNaturalSentences() {
+        val draft = OrbitCommandParser.parseSchedule("Não posso esquecer de estudar amanhã às 08:30")
+        requireNotNull(draft)
+        assertEquals("Estudar", draft.title)
+        assertEquals(dateAfter(1), draft.date)
+        assertEquals("08:30", draft.time)
+    }
+
+    @Test
+    fun recognizesReminderIntentWithDifferentWording() {
+        val draft = OrbitCommandParser.parseSchedule("Preciso lembrar de levar o documento sexta às 14h")
+        requireNotNull(draft)
+        assertEquals("Levar o documento", draft.title)
+        assertEquals("14:00", draft.time)
+    }
+
+    @Test
+    fun detectsIntentEvenWhenItIsNotAtTheBeginning() {
+        assertEquals(true, OrbitCommandParser.hasSchedulingIntent("Amanhã preciso que você me avise às 9h para estudar"))
+    }
+
 }
