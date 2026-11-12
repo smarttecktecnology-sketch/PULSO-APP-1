@@ -72,7 +72,8 @@ class OrbitReminderWorker(context: Context, params: WorkerParameters) : Worker(c
                 @Deprecated("Deprecated in Java")
                 override fun onError(utteranceId: String?) { finished.countDown() }
             })
-            tts.speak(message, TextToSpeech.QUEUE_FLUSH, null, "orbit_voice_reminder")
+            val speakResult = tts.speak(message, TextToSpeech.QUEUE_FLUSH, null, "orbit_voice_reminder")
+            if (speakResult == TextToSpeech.ERROR) return
             finished.await(18, TimeUnit.SECONDS)
         } catch (_: Exception) {
             // A reminder notification remains available if speech synthesis is unavailable.
