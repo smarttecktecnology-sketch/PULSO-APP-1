@@ -69,7 +69,8 @@ object OrbitCommandParser {
         title = title.replace(Regex("\\b\\d{1,2}/\\d{1,2}(?:/\\d{2,4})?\\b"), "")
         title = title.replace(Regex("(?i)\\b(?:as?|para as?)\\s*\\d{1,2}(?::\\d{2}|h\\d{0,2}|\\s*horas?)\\b(?:\\s+da\\s+(?:manha|tarde|noite))?"), "")
         title = title.replace(Regex("(?i)\\b\\d{1,2}h\\d{0,2}\\b"), "")
-        title = title.replace(Regex("[,.;:!?]+"), " ").replace(Regex("\\s+"), " ").trim(' ', '-', 'e')
+        title = title.replace(Regex("[,.;:!?]+"), " ").replace(Regex("\\s+"), " ").trim(' ', '-')
+        title = title.replace(Regex("(?i)^e\\s+"), "")
         return title.ifBlank { command.trim() }.replaceFirstChar { if (it.isLowerCase()) it.titlecase(pt) else it.toString() }
     }
 
