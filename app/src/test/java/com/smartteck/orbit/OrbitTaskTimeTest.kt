@@ -72,6 +72,12 @@ class OrbitTaskTimeTest {
     }
 
     @Test
+    fun taskIdsRemainUniqueWhenSeveralTasksAreCreatedInSameMillisecond() {
+        assertEquals(1_000L, nextOrbitTaskId(emptyList(), 1_000L))
+        assertEquals(1_005L, nextOrbitTaskId(listOf(1_000L, 1_004L), 1_000L))
+    }
+
+    @Test
     fun nonRecurringScheduleCreatesOnlyOneDate() {
         assertEquals(
             listOf("2026-11-12"),
