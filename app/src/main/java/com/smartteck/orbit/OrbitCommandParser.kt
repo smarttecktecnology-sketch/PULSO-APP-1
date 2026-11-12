@@ -91,6 +91,7 @@ object OrbitCommandParser {
         title = title.replace(Regex("(?i)\\b(?:[àa]s?|para\\s+as?)\\s*\\d{1,2}(?::\\d{2}|h\\d{0,2}|\\s*horas?)\\b"), "")
         title = title.replace(Regex("(?i)\\b\\d{1,2}h\\d{0,2}\\b"), "")
         title = title.replace(Regex("(?i)(e\\s+)?(me\\s+)?(lembre|lembrar|lembra|avise|avisar|notifique|notificar)[^,.;]*"), "")
+        title = title.replace(Regex("(?i)\\b(com\\s+)?(aviso|lembrete)\\s+\\d{1,3}\\s*(minutos?|mins?)\\s+antes\\b"), "")
         title = title.replace(Regex("(?i)\\b\\d{1,3}\\s*(minutos?|mins?)\\s+antes\\b"), "")
         title = title.replace(Regex("[,.;:!?]+"), " ").replace(Regex("\\s+"), " ").trim()
         title = title.trim('-', ' ')
