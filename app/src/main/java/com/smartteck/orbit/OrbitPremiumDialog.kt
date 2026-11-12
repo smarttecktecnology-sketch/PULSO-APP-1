@@ -49,7 +49,7 @@ fun OrbitPremiumDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         icon = { Icon(Icons.Default.WorkspacePremium, null, tint = PremiumGold) },
-        title = { Text("SMART ORBIT Premium", color = PremiumText, fontWeight = FontWeight.ExtraBold) },
+        title = { Text("SMART ORBIT MAX", color = PremiumText, fontWeight = FontWeight.ExtraBold) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Surface(color = PremiumGold.copy(alpha = .13f), shape = RoundedCornerShape(12.dp)) {
@@ -59,10 +59,10 @@ fun OrbitPremiumDialog(
                         modifier = Modifier.padding(horizontal = 11.dp, vertical = 8.dp)
                     )
                 }
-                Text("Desbloqueie a futura IA avançada do ORBIT, projetada para funcionar diretamente no celular, sem servidor próprio.", color = PremiumText, fontSize = 13.sp)
-                PremiumFeature("Assistente inteligente avançado")
-                PremiumFeature("Planejamento e organização mais completos")
-                PremiumFeature("Privacidade com processamento local, quando compatível")
+                Text("O plano de maior valor do SMART ORBIT. Libera o assistente de IA avançado e os recursos inteligentes exclusivos.", color = PremiumText, fontSize = 13.sp)
+                PremiumFeature("IA exclusiva: comandos, agenda e organização por conversa")
+                PremiumFeature("Agendamentos e lembretes por linguagem natural")
+                PremiumFeature("Lembretes falados e planejamento inteligente")
                 Spacer(Modifier.height(2.dp))
                 Text(
                     price?.let { "$it / mês, conforme o plano exibido pelo Google Play" }
@@ -71,7 +71,7 @@ fun OrbitPremiumDialog(
                 )
                 Text(status, color = PremiumMuted, fontSize = 11.sp)
                 if (!isPremium) {
-                    Text("A cobrança só será habilitada depois que a IA Premium estiver pronta e o plano estiver publicado. Nenhuma cobrança será iniciada nesta versão.", color = PremiumMuted, fontSize = 10.sp)
+                    Text("A IA só será liberada após a confirmação da assinatura ORBIT MAX. A compra ficará indisponível até a conclusão e validação da IA avançada.", color = PremiumMuted, fontSize = 10.sp)
                 }
             }
         },
@@ -80,7 +80,7 @@ fun OrbitPremiumDialog(
                 onClick = onPurchase,
                 enabled = isPremium.not() && productReady && false,
                 colors = ButtonDefaults.buttonColors(containerColor = PremiumBlue)
-            ) { Icon(Icons.Default.Lock, null); Text("Assinar quando estiver disponível") }
+            ) { Icon(Icons.Default.Lock, null); Text("ORBIT MAX em preparação") }
         },
         dismissButton = {
             Row {
