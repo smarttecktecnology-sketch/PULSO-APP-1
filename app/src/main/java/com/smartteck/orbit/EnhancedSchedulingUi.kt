@@ -140,24 +140,16 @@ internal fun EnhancedAssistantDialog(onDismiss: () -> Unit, onCreateTask: (Strin
     var answer by remember { mutableStateOf("Olá! Descreva seu compromisso. Vou identificar a data e o horário para você revisar antes de agendar.") }
     var draft by remember { mutableStateOf<OrbitScheduleDraft?>(null) }
     var messageVersion by remember { mutableIntStateOf(0) }
+    val conversation = remember { OrbitScheduleConversation() }
 
     fun reply(message: String) { answer = message; messageVersion++ }
     fun interpret() {
         val command = prompt.trim()
         if (command.isBlank()) return
-        draft = null
-        val parsed = OrbitCommandParser.parseSchedule(command)
-        if (parsed != null) {
-            draft = parsed
-            reply("Encontrei os dados do compromisso. Confira o resumo abaixo e confirme quando estiver tudo certo.")
-            prompt = ""
-        } else if (OrbitCommandParser.hasSchedulingIntent(command) && !OrbitCommandParser.hasExplicitTime(command)) {
-            reply("por favor defina o horário do lembrete")
-        } else if (OrbitCommandParser.hasSchedulingIntent(command)) {
-            reply("Não consegui identificar a data do compromisso. Informe uma data, por exemplo: 20/11/2026.")
-        } else {
-            reply("Eu cuido somente dos seus compromissos e lembretes. Descreva o que deseja lembrar, com data e horário.")
-        }
+        val result = conversation.submit(command)
+        draft = result.draft
+        reply(result.message)
+        prompt = ""
     }
 
     AlertDialog(
