@@ -78,6 +78,8 @@ class OrbitBillingManager(
                 .setProductType(BillingClient.ProductType.SUBS)
                 .build()
         }
+        products.clear()
+        offers.clear()
         val params = QueryProductDetailsParams.newBuilder().setProductList(productList).build()
         billingClient.queryProductDetailsAsync(params) { result, detailsResult ->
             if (result.responseCode == BillingClient.BillingResponseCode.OK) {
