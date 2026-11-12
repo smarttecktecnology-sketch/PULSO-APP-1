@@ -85,6 +85,7 @@ private fun OrbitApp() {
     var premiumPrice by remember { mutableStateOf<String?>(null) }
     var premiumStatus by remember { mutableStateOf("Preparando assinatura do Google Play…") }
     var premiumProductReady by remember { mutableStateOf(false) }
+    var voiceRemindersEnabled by remember { mutableStateOf(context.getSharedPreferences("orbit_settings", Context.MODE_PRIVATE).getBoolean("voice_reminders", true)) }
     val billingManager = remember(context) {
         OrbitBillingManager(context) { active, status, price, ready ->
             premiumActive = active
@@ -107,10 +108,10 @@ private fun OrbitApp() {
 
     // Recria os lembretes das tarefas pendentes ao abrir o app.
     // O WorkManager mantém os trabalhos já agendados entre reinicializações.
-    LaunchedEffect(tasks) {
+    LaunchedEffect(tasks, voiceRemindersEnabled) {
         tasks.forEach { task ->
             if (task.done) cancelOrbitReminder(context, task.id)
-            else scheduleOrbitReminder(context, task)
+            else scheduleOrbitReminder(context, task, voiceRemindersEnabled)
         }
     }
 
@@ -129,17 +130,25 @@ private fun OrbitApp() {
         val task = OrbitTask(System.currentTimeMillis(), title.trim(), date.trim(), false, time.trim(), leadMinutes.coerceIn(0, 1440))
         tasks = tasks + task
         saveTasks(context, tasks)
-        scheduleOrbitReminder(context, task)
+        scheduleOrbitReminder(context, task, voiceRemindersEnabled)
     }
     fun updateTask(updated: OrbitTask) {
         tasks = tasks.map { if (it.id == updated.id) updated else it }
         saveTasks(context, tasks)
-        if (updated.done) cancelOrbitReminder(context, updated.id) else scheduleOrbitReminder(context, updated)
+        if (updated.done) cancelOrbitReminder(context, updated.id) else scheduleOrbitReminder(context, updated, voiceRemindersEnabled)
     }
     fun removeTask(task: OrbitTask) {
         tasks = tasks.filterNot { it.id == task.id }
         saveTasks(context, tasks)
         cancelOrbitReminder(context, task.id)
+    }
+
+    val openAssistant = {
+        if (premiumActive) showAssistant = true
+        else {
+            showPremium = true
+            Toast.makeText(context, "O assistente de IA é exclusivo do plano mais caro: ORBIT MAX.", Toast.LENGTH_LONG).show()
+        }
     }
 
     MaterialTheme(colorScheme = darkColorScheme(primary = OrbitBlue, background = OrbitBg, surface = OrbitPanel, onBackground = OrbitText, onSurface = OrbitText)) {
@@ -162,7 +171,12 @@ private fun OrbitApp() {
                     },
                     actions = {
                         IconButton(onClick = { showPremium = true }) { Icon(Icons.Default.WorkspacePremium, "SMART ORBIT Premium", tint = Color(0xFFFFD166)) }
-                        IconButton(onClick = { showAssistant = true }) { Icon(Icons.Default.AutoAwesome, "Assistente ORBIT", tint = OrbitCyan) }
+                        IconButton(onClick = openAssistant) { Icon(Icons.Default.AutoAwesome, "Assistente ORBIT — ORBIT MAX", tint = if (premiumActive) OrbitCyan else OrbitMuted) }
+                        IconButton(onClick = {
+                            voiceRemindersEnabled = !voiceRemindersEnabled
+                            context.getSharedPreferences("orbit_settings", Context.MODE_PRIVATE).edit().putBoolean("voice_reminders", voiceRemindersEnabled).apply()
+                            Toast.makeText(context, if (voiceRemindersEnabled) "Lembretes falados ativados" else "Lembretes falados desativados", Toast.LENGTH_SHORT).show()
+                        }) { Icon(if (voiceRemindersEnabled) Icons.Default.VolumeUp else Icons.Default.VolumeOff, if (voiceRemindersEnabled) "Desativar avisos falados" else "Ativar avisos falados", tint = if (voiceRemindersEnabled) OrbitCyan else OrbitMuted) }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = OrbitBg)
                 )
@@ -189,7 +203,7 @@ private fun OrbitApp() {
         ) { padding ->
             Box(Modifier.fillMaxSize().padding(padding)) {
                 when (page) {
-                    OrbitPage.HOME -> HomeScreen(tasks, documents.size, { page = OrbitPage.TASKS }, { page = OrbitPage.AGENDA }, { showAssistant = true }, { updateTask(it.copy(done = !it.done)) })
+                    OrbitPage.HOME -> HomeScreen(tasks, documents.size, { page = OrbitPage.TASKS }, { page = OrbitPage.AGENDA }, openAssistant, { updateTask(it.copy(done = !it.done)) })
                     OrbitPage.TASKS -> TasksScreen(tasks, { updateTask(it.copy(done = !it.done)) }, { removeTask(it) }, { editingTask = it })
                     OrbitPage.AGENDA -> AgendaScreen(tasks)
                     OrbitPage.FILES -> FilesScreen(documents, { documentPicker.launch(arrayOf("*/*")) }, {
@@ -210,7 +224,7 @@ private fun OrbitApp() {
                 editingTask = null
             }
         }
-        if (showAssistant) AssistantDialog(
+        if (showAssistant && premiumActive) AssistantDialog(
             tasks = tasks,
             onDismiss = { showAssistant = false },
             onCreateTask = { title, date, time, lead -> addTask(title, date, time, lead) }
@@ -737,7 +751,7 @@ private fun EmptyState(title: String, subtitle: String, icon: androidx.compose.u
 }
 
 
-private fun scheduleOrbitReminder(context: Context, task: OrbitTask) {
+private fun scheduleOrbitReminder(context: Context, task: OrbitTask, voiceEnabled: Boolean = true) {
     if (task.dueDate.isBlank() || task.done) return
     val parser = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply { isLenient = false }
     val position = java.text.ParsePosition(0)
@@ -765,6 +779,7 @@ private fun scheduleOrbitReminder(context: Context, task: OrbitTask) {
             .putString(OrbitReminderWorker.KEY_TITLE, task.title)
             .putLong(OrbitReminderWorker.KEY_TASK_ID, task.id)
             .putInt(OrbitReminderWorker.KEY_LEAD_MINUTES, task.reminderLeadMinutes)
+            .putBoolean(OrbitReminderWorker.KEY_VOICE_ENABLED, voiceEnabled)
             .build()).build()
     WorkManager.getInstance(context).enqueueUniqueWork(
         "orbit_task_reminder_${task.id}", ExistingWorkPolicy.REPLACE, request
