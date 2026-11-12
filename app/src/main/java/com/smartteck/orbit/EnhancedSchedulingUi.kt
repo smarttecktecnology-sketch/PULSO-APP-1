@@ -38,11 +38,13 @@ private val SGreen = Color(0xFF45C99A)
 internal fun EnhancedAddTaskDialog(
     onDismiss: () -> Unit,
     initialTask: OrbitTask? = null,
-    onSave: (String, String, String) -> Unit
+    onSave: (String, String, String, String) -> Unit
 ) {
     var title by remember(initialTask?.id) { mutableStateOf(initialTask?.title.orEmpty()) }
     var date by remember(initialTask?.id) { mutableStateOf(initialTask?.dueDate.orEmpty()) }
     var time by remember(initialTask?.id) { mutableStateOf(initialTask?.reminderTime ?: "09:00") }
+    var recurrence by remember(initialTask?.id) { mutableStateOf("once") }
+    var recurrenceExpanded by remember { mutableStateOf(false) }
     var showDate by remember { mutableStateOf(false) }
     var showTime by remember { mutableStateOf(false) }
     var validate by remember { mutableStateOf(false) }
@@ -82,6 +84,24 @@ internal fun EnhancedAddTaskDialog(
                     trailingIcon = { IconButton(onClick = { showTime = true }) { Icon(Icons.Default.Schedule, "Selecionar horário", tint = SCyan) } },
                     supportingText = { Text("Formato 24 horas • use o relógio para escolher") }, shape = RoundedCornerShape(14.dp)
                 )
+                if (initialTask == null) {
+                    Text("03  •  REPETIÇÃO", color = SCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    Box {
+                        OutlinedButton(onClick = { recurrenceExpanded = true }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp)) {
+                            Icon(Icons.Default.Repeat, null, tint = SCyan)
+                            Spacer(Modifier.width(8.dp))
+                            Text(when (recurrence) { "daily" -> "Todos os dias"; "weekly" -> "Toda semana"; "monthly" -> "Todo mês"; else -> "Não repetir" })
+                            Spacer(Modifier.weight(1f))
+                            Icon(Icons.Default.ArrowDropDown, null, tint = SMuted)
+                        }
+                        DropdownMenu(expanded = recurrenceExpanded, onDismissRequest = { recurrenceExpanded = false }) {
+                            listOf("once" to "Não repetir", "daily" to "Todos os dias", "weekly" to "Toda semana", "monthly" to "Todo mês").forEach { (value, label) ->
+                                DropdownMenuItem(text = { Text(label) }, onClick = { recurrence = value; recurrenceExpanded = false })
+                            }
+                        }
+                    }
+                    if (recurrence != "once") Text("Serão criadas até 12 ocorrências, com lembretes individuais.", color = SMuted, fontSize = 11.sp)
+                }
                 AnimatedVisibility(validate && (title.isBlank() || !validDate || !validTime || !futureSchedule), enter = fadeIn() + slideInVertically(), exit = fadeOut()) {
                     Surface(color = Color(0xFF542B38), shape = RoundedCornerShape(12.dp)) {
                         Text(
@@ -102,7 +122,7 @@ internal fun EnhancedAddTaskDialog(
         confirmButton = {
             Button(onClick = {
                 validate = true
-                if (title.isNotBlank() && validDate && validTime && futureSchedule) onSave(title.trim(), date, time.trim())
+                if (title.isNotBlank() && validDate && validTime && futureSchedule) onSave(title.trim(), date, time.trim(), recurrence)
             }, colors = ButtonDefaults.buttonColors(containerColor = SBlue), shape = RoundedCornerShape(12.dp)) {
                 Icon(Icons.Default.CheckCircle, null, modifier = Modifier.size(17.dp)); Spacer(Modifier.width(7.dp)); Text("Salvar compromisso")
             }
