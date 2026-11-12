@@ -208,7 +208,7 @@ private fun OrbitApp() {
         ) { padding ->
             Box(Modifier.fillMaxSize().padding(padding)) {
                 when (page) {
-                    OrbitPage.HOME -> HomeScreen(tasks, documents.size, { page = OrbitPage.TASKS }, { page = OrbitPage.AGENDA }, openAssistant, { page = OrbitPage.PLANS }, { updateTask(it.copy(done = !it.done)) })
+                    OrbitPage.HOME -> HomeScreen(activeTier, tasks, documents.size, { page = OrbitPage.TASKS }, { page = OrbitPage.AGENDA }, openAssistant, { page = OrbitPage.PLANS }, { updateTask(it.copy(done = !it.done)) })
                     OrbitPage.TASKS -> TasksScreen(tasks, { updateTask(it.copy(done = !it.done)) }, { removeTask(it) }, { editingTask = it })
                     OrbitPage.AGENDA -> AgendaScreen(tasks)
                     OrbitPage.FILES -> FilesScreen(documents, { documentPicker.launch(arrayOf("*/*")) }, {
@@ -296,7 +296,7 @@ private fun OrbitSplashScreen() {
 }
 
 @Composable
-private fun HomeScreen(tasks: List<OrbitTask>, documentCount: Int, onTasks: () -> Unit, onAgenda: () -> Unit, onAssistant: () -> Unit, onPlans: () -> Unit, onToggle: (OrbitTask) -> Unit) {
+private fun HomeScreen(activeTier: OrbitPlanTier, tasks: List<OrbitTask>, documentCount: Int, onTasks: () -> Unit, onAgenda: () -> Unit, onAssistant: () -> Unit, onPlans: () -> Unit, onToggle: (OrbitTask) -> Unit) {
     val pending = tasks.count { !it.done }
     val completed = tasks.count { it.done }
     val today = SimpleDateFormat("EEEE, d 'de' MMMM", Locale("pt", "BR")).format(Date())
@@ -341,7 +341,7 @@ private fun HomeScreen(tasks: List<OrbitTask>, documentCount: Int, onTasks: () -
                 }
             }
         }
-        item { OrbitProgressPanel(tasks) }
+        if (activeTier == OrbitPlanTier.MAX) item { OrbitProgressPanel(tasks) }
         item { SectionHeader("Acesso rápido", "Atalhos para sua rotina") }
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
