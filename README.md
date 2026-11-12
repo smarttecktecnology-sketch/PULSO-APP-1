@@ -53,3 +53,12 @@ Free, ORBIT Start, ORBIT Plus e ORBIT Ultra. Os preços e limites permanecem pro
 - Target SDK: 35
 
 > O repositório contém código-fonte. Um APK ainda precisa ser compilado, testado em dispositivos reais, assinado e preparado para distribuição.
+
+
+## SMART ORBIT Premium
+
+- O app possui uma tela inicial de apresentação do plano Premium e a camada de integração com Google Play Billing Library 8.0.0.
+- ID de produto de assinatura reservado: `orbit_premium_monthly` (deve ser criado no Google Play Console com plano-base mensal correspondente).
+- O botão de compra permanece intencionalmente desativado até a IA Premium estar implementada e testada, evitando cobrar por uma função indisponível.
+- O aplicativo não utiliza servidor próprio. A consulta de compras é feita pelo Google Play Billing no dispositivo; para validação de compra mais resistente a adulterações, a documentação do Google recomenda verificação no servidor. Essa limitação precisa ser aceita conscientemente antes da publicação comercial.
+- A IA avançada ainda não está incluída nesta etapa; o assistente local atual continua gratuito.
