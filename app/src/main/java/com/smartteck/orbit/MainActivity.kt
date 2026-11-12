@@ -285,7 +285,12 @@ private fun HomeScreen(tasks: List<OrbitTask>, documentCount: Int, onTasks: () -
             }
         }
         if (tasks.none { !it.done }) item { EmptyState("Tudo tranquilo por aqui", "Adicione uma tarefa pelo botão + para começar.", Icons.Default.CheckCircle) }
-        else items(tasks.filter { !it.done }.take(4), key = { it.id }) { TaskRow(it, onToggle, null) }
+        else items(
+            tasks.filter { !it.done }
+                .sortedWith(compareBy<OrbitTask>({ if (it.dueDate.isBlank()) "9999-99-99" else it.dueDate }, { it.reminderTime }))
+                .take(4),
+            key = { it.id }
+        ) { TaskRow(it, onToggle, null) }
     }
 }
 
@@ -373,13 +378,16 @@ private fun FilesScreen(documents: List<OrbitDocument>, onAdd: () -> Unit, onDel
 
 @Composable
 private fun TaskRow(task: OrbitTask, onToggle: (OrbitTask) -> Unit, onDelete: ((OrbitTask) -> Unit)?, showToggle: Boolean = true, onEdit: ((OrbitTask) -> Unit)? = null) {
+    val todayIso = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
+    val overdue = !task.done && task.dueDate.isNotBlank() && task.dueDate.length == 10 && task.dueDate < todayIso
     Card(colors = CardDefaults.cardColors(containerColor = OrbitPanel), shape = RoundedCornerShape(16.dp)) {
         Row(Modifier.fillMaxWidth().padding(start = 12.dp, end = 6.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             if (showToggle) Checkbox(task.done, { onToggle(task) }, colors = CheckboxDefaults.colors(checkedColor = OrbitGreen, uncheckedColor = OrbitMuted))
             else Icon(Icons.Default.Event, null, tint = OrbitCyan, modifier = Modifier.padding(horizontal = 12.dp))
             Column(Modifier.weight(1f).padding(vertical = 7.dp)) {
                 Text(task.title, color = if (task.done) OrbitMuted else OrbitText, fontWeight = FontWeight.SemiBold)
-                if (task.dueDate.isNotBlank()) Text("Data: ${task.dueDate}", color = OrbitMuted, fontSize = 11.sp)
+                if (task.dueDate.isNotBlank()) Text("Data: ${task.dueDate} • Lembrete: ${task.reminderTime}", color = OrbitMuted, fontSize = 11.sp)
+                if (overdue) Text("Atrasada — precisa de atenção", color = Color(0xFFFF8A80), fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
             }
             if (onEdit != null) IconButton(onClick = { onEdit(task) }) { Icon(Icons.Default.Edit, "Editar tarefa", tint = OrbitCyan) }
             if (onDelete != null) IconButton(onClick = { onDelete(task) }) { Icon(Icons.Default.DeleteOutline, "Excluir tarefa", tint = OrbitMuted) }
