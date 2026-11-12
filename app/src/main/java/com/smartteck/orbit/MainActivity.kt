@@ -794,37 +794,24 @@ private fun EmptyState(title: String, subtitle: String, icon: androidx.compose.u
 
 
 private fun scheduleOrbitReminder(context: Context, task: OrbitTask, voiceEnabled: Boolean = true) {
-    // Always replace/cancel the previous request first. This prevents reminders
-    // from firing after a task is completed, cleared, or edited to an invalid date.
     cancelOrbitReminder(context, task.id)
     if (task.dueDate.isBlank() || task.done) return
-    val parser = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply { isLenient = false }
-    val position = java.text.ParsePosition(0)
-    val parsed = try { parser.parse(task.dueDate, position) } catch (_: Exception) { null }
-    if (parsed == null || position.index != task.dueDate.length) return
-    val now = Calendar.getInstance()
-    val timeParts = task.reminderTime.split(":")
-    if (timeParts.size != 2) return
-    val hour = timeParts[0].toIntOrNull() ?: return
-    val minute = timeParts[1].toIntOrNull() ?: return
-    if (hour !in 0..23 || minute !in 0..59) return
-    val due = Calendar.getInstance().apply {
-        time = parsed
-        set(Calendar.HOUR_OF_DAY, hour); set(Calendar.MINUTE, minute)
-        set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
-    }
-    val today = now.get(Calendar.YEAR) == due.get(Calendar.YEAR) &&
-        now.get(Calendar.DAY_OF_YEAR) == due.get(Calendar.DAY_OF_YEAR)
-    if (due.before(now)) return
-    due.add(Calendar.MINUTE, -task.reminderLeadMinutes.coerceIn(0, 1440))
-    // If the event is still in the future but its lead-time reminder has
-    // already passed, notify immediately instead of silently dropping it.
+    val dueMillis = orbitLocalDateTimeMillis(task.dueDate, task.reminderTime) ?: return
+    val nowMillis = System.currentTimeMillis()
+    if (dueMillis <= nowMillis) return
+
+    val leadMinutes = task.reminderLeadMinutes.coerceIn(0, 1440)
+    val requestedReminderMillis = dueMillis - TimeUnit.MINUTES.toMillis(leadMinutes.toLong())
+    val leadAlreadyPassed = leadMinutes > 0 && requestedReminderMillis <= nowMillis
+    val triggerMillis = if (leadAlreadyPassed) nowMillis else requestedReminderMillis
+
     val request = OneTimeWorkRequestBuilder<OrbitReminderWorker>()
-        .setInitialDelay((due.timeInMillis - now.timeInMillis).coerceAtLeast(0L), TimeUnit.MILLISECONDS)
+        .setInitialDelay((triggerMillis - nowMillis).coerceAtLeast(0L), TimeUnit.MILLISECONDS)
         .setInputData(androidx.work.Data.Builder()
             .putString(OrbitReminderWorker.KEY_TITLE, task.title)
             .putLong(OrbitReminderWorker.KEY_TASK_ID, task.id)
-            .putInt(OrbitReminderWorker.KEY_LEAD_MINUTES, task.reminderLeadMinutes)
+            .putInt(OrbitReminderWorker.KEY_LEAD_MINUTES, leadMinutes)
+            .putBoolean(OrbitReminderWorker.KEY_LEAD_ALREADY_PASSED, leadAlreadyPassed)
             .putBoolean(OrbitReminderWorker.KEY_VOICE_ENABLED, voiceEnabled)
             .build()).build()
     WorkManager.getInstance(context).enqueueUniqueWork(
