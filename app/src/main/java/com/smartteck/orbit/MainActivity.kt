@@ -432,8 +432,8 @@ private fun OrbitProgressMetric(label: String, progress: Pair<Int, Int>, modifie
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         Text(label, color = OrbitMuted, fontSize = 11.sp, fontWeight = FontWeight.Medium)
-        Text("\${completed}/\${total}", color = OrbitText, fontSize = 23.sp, fontWeight = FontWeight.ExtraBold)
-        Text("\${remaining} restantes", color = OrbitCyan, fontSize = 10.sp)
+        Text("$completed/$total", color = OrbitText, fontSize = 23.sp, fontWeight = FontWeight.ExtraBold)
+        Text("$remaining restantes", color = OrbitCyan, fontSize = 10.sp)
     }
 }
 
