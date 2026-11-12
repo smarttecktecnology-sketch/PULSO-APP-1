@@ -752,6 +752,9 @@ private fun EmptyState(title: String, subtitle: String, icon: androidx.compose.u
 
 
 private fun scheduleOrbitReminder(context: Context, task: OrbitTask, voiceEnabled: Boolean = true) {
+    // Always replace/cancel the previous request first. This prevents reminders
+    // from firing after a task is completed, cleared, or edited to an invalid date.
+    cancelOrbitReminder(context, task.id)
     if (task.dueDate.isBlank() || task.done) return
     val parser = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply { isLenient = false }
     val position = java.text.ParsePosition(0)
@@ -772,7 +775,8 @@ private fun scheduleOrbitReminder(context: Context, task: OrbitTask, voiceEnable
         now.get(Calendar.DAY_OF_YEAR) == due.get(Calendar.DAY_OF_YEAR)
     if (due.before(now)) return
     due.add(Calendar.MINUTE, -task.reminderLeadMinutes.coerceIn(0, 1440))
-    if (due.before(now)) return
+    // If the event is still in the future but its lead-time reminder has
+    // already passed, notify immediately instead of silently dropping it.
     val request = OneTimeWorkRequestBuilder<OrbitReminderWorker>()
         .setInitialDelay((due.timeInMillis - now.timeInMillis).coerceAtLeast(0L), TimeUnit.MILLISECONDS)
         .setInputData(androidx.work.Data.Builder()
