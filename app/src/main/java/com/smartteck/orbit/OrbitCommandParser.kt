@@ -102,6 +102,9 @@ object OrbitCommandParser {
             ""
         )
         title = title.replace(Regex("(?i)\\bdepois\\s+de\\s+amanh[ãa]\\b"), "")
+        title = title.replace(Regex("(?i)\\bdaqui\\s+a\\s+\\d{1,3}\\s+dias?\\b"), "")
+        title = title.replace(Regex("(?i)\\b(?:dia\\s+)?\\d{1,2}\\s+de\\s+(janeiro|fevereiro|marco|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro)(?:\\s+de\\s+\\d{4})?\\b"), "")
+        title = title.replace(Regex("(?i)\\bdia\\s+\\d{1,2}/\\d{1,2}(?:/\\d{2,4})?\\b"), "")
         title = title.replace(Regex("(?i)\\b(hoje|amanh[ãa]|segunda(-feira)?|ter[cç]a(-feira)?|quarta(-feira)?|quinta(-feira)?|sexta(-feira)?|s[áa]bado|domingo)\\b"), "")
         title = title.replace(Regex("\\b\\d{1,2}/\\d{1,2}(/\\d{2,4})?\\b"), "")
         title = title.replace(Regex("(?i)\\b(?:[àa]s?|para\\s+as?)\\s*\\d{1,2}(?::\\d{2}|h\\d{0,2}|\\s*horas?)\\b(?:\\s+da\\s+(?:manha|tarde|noite))?"), "")
@@ -132,9 +135,36 @@ object OrbitCommandParser {
         val cal = Calendar.getInstance()
         when {
             normalized.contains("depois de amanha") -> cal.add(Calendar.DAY_OF_YEAR, 2)
+            Regex("\\bdaqui a (\\d{1,3}) dias?\\b").find(normalized) != null -> {
+                val days = Regex("\\bdaqui a (\\d{1,3}) dias?\\b").find(normalized)?.groupValues?.get(1)?.toIntOrNull() ?: return null
+                if (days !in 1..365) return null
+                cal.add(Calendar.DAY_OF_YEAR, days)
+            }
             Regex("\\bamanha\\b").containsMatchIn(normalized) -> cal.add(Calendar.DAY_OF_YEAR, 1)
             Regex("\\bhoje\\b").containsMatchIn(normalized) -> Unit
             else -> {
+                val monthNames = mapOf(
+                    "janeiro" to Calendar.JANUARY, "fevereiro" to Calendar.FEBRUARY,
+                    "marco" to Calendar.MARCH, "abril" to Calendar.APRIL,
+                    "maio" to Calendar.MAY, "junho" to Calendar.JUNE,
+                    "julho" to Calendar.JULY, "agosto" to Calendar.AUGUST,
+                    "setembro" to Calendar.SEPTEMBER, "outubro" to Calendar.OCTOBER,
+                    "novembro" to Calendar.NOVEMBER, "dezembro" to Calendar.DECEMBER
+                )
+                val namedDate = Regex("\\b(?:dia\\s+)?(\\d{1,2})\\s+de\\s+(janeiro|fevereiro|marco|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro)(?:\\s+de\\s+(\\d{4}))?\\b").find(normalized)
+                if (namedDate != null) {
+                    val day = namedDate.groupValues[1].toIntOrNull() ?: return null
+                    val month = monthNames[namedDate.groupValues[2]] ?: return null
+                    val year = namedDate.groupValues[3].toIntOrNull() ?: cal.get(Calendar.YEAR)
+                    cal.setLenient(false)
+                    try {
+                        cal.set(year, month, day, 0, 0, 0)
+                        cal.set(Calendar.MILLISECOND, 0)
+                        cal.time
+                    } catch (_: Exception) { return null }
+                    if (namedDate.groupValues[3].isBlank() && cal.timeInMillis < System.currentTimeMillis()) cal.add(Calendar.YEAR, 1)
+                    return SimpleDateFormat("yyyy-MM-dd", Locale.US).format(cal.time)
+                }
                 val weekdays = listOf(
                     "domingo" to Calendar.SUNDAY,
                     "segunda" to Calendar.MONDAY, "segunda feira" to Calendar.MONDAY,
