@@ -214,7 +214,7 @@ private fun OrbitApp() {
         }
         if (showTaskDialog || editingTask != null) {
             val taskBeingEdited = editingTask
-            AddTaskDialog(
+            EnhancedAddTaskDialog(
                 onDismiss = { showTaskDialog = false; editingTask = null },
                 initialTask = taskBeingEdited
             ) { title, date, time ->
@@ -224,7 +224,7 @@ private fun OrbitApp() {
                 editingTask = null
             }
         }
-        if (showAssistant && premiumActive) AssistantDialog(
+        if (showAssistant && premiumActive) EnhancedAssistantDialog(
             onDismiss = { showAssistant = false },
             onCreateTask = { title, date, time, lead -> addTask(title, date, time, lead) }
         )
