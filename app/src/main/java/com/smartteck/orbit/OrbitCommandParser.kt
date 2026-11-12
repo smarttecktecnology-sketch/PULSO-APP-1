@@ -72,16 +72,22 @@ object OrbitCommandParser {
         val date = parseDate(normalized) ?: return null
         val timeMatch = Regex("\\b(?:as?\\s*)?(\\d{1,2})(?::(\\d{2})|h(\\d{2})?|\\s*horas?)\\b")
             .find(normalized) ?: return null
-        val hour = (timeMatch.groups[1]?.value ?: "").toIntOrNull() ?: return null
+        var hour = (timeMatch.groups[1]?.value ?: "").toIntOrNull() ?: return null
         val minute = (timeMatch.groups[2]?.value ?: timeMatch.groups[3]?.value ?: "0").toIntOrNull() ?: return null
+        val timeSuffix = normalized.substring(timeMatch.range.last + 1).trimStart()
+        when {
+            timeSuffix.startsWith("da noite") || timeSuffix.startsWith("da tarde") -> if (hour in 1..11) hour += 12
+            timeSuffix.startsWith("da manha") && hour == 12 -> hour = 0
+        }
         if (hour !in 0..23 || minute !in 0..59) return null
 
+        val minuteLead = Regex("(\\d{1,4})\\s*(minuto|minutos|min)\\s*antes").find(normalized)
+            ?.groupValues?.get(1)?.toIntOrNull()
+        val hourLead = Regex("(\\d{1,2})\\s*horas?\\s*antes").find(normalized)
+            ?.groupValues?.get(1)?.toIntOrNull()
         val lead = when {
-            Regex("30\\s*(minuto|minutos|min)\\s*antes").containsMatchIn(normalized) -> 30
-            Regex("15\\s*(minuto|minutos|min)\\s*antes").containsMatchIn(normalized) -> 15
-            Regex("1\\s*hora\\s*antes").containsMatchIn(normalized) -> 60
-            Regex("(\\d{1,3})\\s*(minuto|minutos|min)\\s*antes").find(normalized)?.groupValues?.get(1) != null ->
-                Regex("(\\d{1,3})\\s*(minuto|minutos|min)\\s*antes").find(normalized)?.groupValues?.get(1)?.toIntOrNull()?.coerceIn(0, 1440) ?: 0
+            minuteLead != null -> minuteLead.coerceIn(0, 1440)
+            hourLead != null -> (hourLead * 60).coerceIn(0, 1440)
             else -> 0
         }
 
@@ -97,7 +103,7 @@ object OrbitCommandParser {
         title = title.replace(Regex("(?i)\\bdepois\\s+de\\s+amanh[ãa]\\b"), "")
         title = title.replace(Regex("(?i)\\b(hoje|amanh[ãa]|segunda(-feira)?|ter[cç]a(-feira)?|quarta(-feira)?|quinta(-feira)?|sexta(-feira)?|s[áa]bado|domingo)\\b"), "")
         title = title.replace(Regex("\\b\\d{1,2}/\\d{1,2}(/\\d{2,4})?\\b"), "")
-        title = title.replace(Regex("(?i)\\b(?:[àa]s?|para\\s+as?)\\s*\\d{1,2}(?::\\d{2}|h\\d{0,2}|\\s*horas?)\\b"), "")
+        title = title.replace(Regex("(?i)\\b(?:[àa]s?|para\\s+as?)\\s*\\d{1,2}(?::\\d{2}|h\\d{0,2}|\\s*horas?)\\b(?:\\s+da\\s+(?:manha|tarde|noite))?"), "")
         title = title.replace(Regex("(?i)\\b\\d{1,2}h\\d{0,2}\\b"), "")
         title = title.replace(Regex("(?i)(e\\s+)?(me\\s+)?(lembre|lembrar|lembra|avise|avisar|notifique|notificar)[^,.;]*"), "")
         title = title.replace(Regex("(?i)\\b(com\\s+)?(aviso|lembrete)\\s+\\d{1,3}\\s*(minutos?|mins?)\\s+antes\\b"), "")
@@ -105,6 +111,18 @@ object OrbitCommandParser {
         title = title.replace(Regex("[,.;:!?]+"), " ").replace(Regex("\\s+"), " ").trim()
         title = title.trim('-', ' ')
         if (title.isBlank()) title = "Compromisso"
+        val dueDate = try {
+            SimpleDateFormat("yyyy-MM-dd", Locale.US).apply { isLenient = false }.parse(date)
+        } catch (_: Exception) { null } ?: return null
+        val due = Calendar.getInstance().apply {
+            time = dueDate
+            set(Calendar.HOUR_OF_DAY, hour)
+            set(Calendar.MINUTE, minute)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+        if (!due.after(Calendar.getInstance())) return null
+
         return OrbitScheduleDraft(title.replaceFirstChar { if (it.isLowerCase()) it.titlecase(pt) else it.toString() },
             date, "%02d:%02d".format(Locale.US, hour, minute), lead)
     }
