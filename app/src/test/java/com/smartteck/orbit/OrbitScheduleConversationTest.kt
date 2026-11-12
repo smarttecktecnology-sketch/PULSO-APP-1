@@ -35,6 +35,36 @@ class OrbitScheduleConversationTest {
     }
 
     @Test
+    fun acceptsNaturalDescriptionWithoutSchedulingKeyword() {
+        val conversation = OrbitScheduleConversation()
+        val result = conversation.submit("Dentista amanhã às 14h")
+        assertNotNull(result.draft)
+        assertEquals("Dentista", result.draft?.title)
+        assertEquals("14:00", result.draft?.time)
+    }
+
+    @Test
+    fun acceptsDateAsFollowUpAfterTimeWasProvided() {
+        val conversation = OrbitScheduleConversation()
+        val first = conversation.submit("Me lembre de estudar às 19h")
+        assertEquals("Qual é a data do compromisso?", first.message)
+        val second = conversation.submit("amanhã")
+        assertNotNull(second.draft)
+        assertEquals("Estudar", second.draft?.title)
+        assertEquals("19:00", second.draft?.time)
+    }
+
+    @Test
+    fun keepsAskingForExactTimeWhenFollowUpIsVague() {
+        val conversation = OrbitScheduleConversation()
+        conversation.submit("Me lembre de estudar amanhã")
+        val result = conversation.submit("depois do almoço")
+        assertNull(result.draft)
+        assertEquals("por favor defina o horário do lembrete", result.message)
+        assertTrue(conversation.hasPendingRequest())
+    }
+
+    @Test
     fun clearsPendingRequest() {
         val conversation = OrbitScheduleConversation()
         conversation.submit("Me lembre de estudar amanhã")
