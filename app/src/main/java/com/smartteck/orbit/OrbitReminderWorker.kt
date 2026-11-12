@@ -17,6 +17,7 @@ class OrbitReminderWorker(context: Context, params: WorkerParameters) : Worker(c
     override fun doWork(): Result {
         val title = inputData.getString(KEY_TITLE) ?: "Tarefa pendente"
         val taskId = inputData.getLong(KEY_TASK_ID, System.currentTimeMillis())
+        val leadMinutes = inputData.getInt(KEY_LEAD_MINUTES, 0)
         createOrbitNotificationChannel(applicationContext)
         if (Build.VERSION.SDK_INT >= 33 &&
             ContextCompat.checkSelfPermission(applicationContext, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
@@ -32,7 +33,7 @@ class OrbitReminderWorker(context: Context, params: WorkerParameters) : Worker(c
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentTitle("Lembrete SMART ORBIT")
             .setContentText(title)
-            .setStyle(NotificationCompat.BigTextStyle().bigText("Sua tarefa está prevista para hoje: $title"))
+            .setStyle(NotificationCompat.BigTextStyle().bigText(if (leadMinutes > 0) "Faltam $leadMinutes minutos para: $title" else "Está na hora de: $title"))
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setAutoCancel(true)
             .setContentIntent(openApp)
@@ -44,6 +45,7 @@ class OrbitReminderWorker(context: Context, params: WorkerParameters) : Worker(c
         const val CHANNEL_ID = "orbit_task_reminders"
         const val KEY_TITLE = "task_title"
         const val KEY_TASK_ID = "task_id"
+        const val KEY_LEAD_MINUTES = "lead_minutes"
     }
 }
 fun createOrbitNotificationChannel(context: Context) {
