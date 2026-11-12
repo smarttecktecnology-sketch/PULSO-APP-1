@@ -160,4 +160,14 @@ class OrbitCommandParserTest {
         }
     }
 
+
+    @Test
+    fun recognizesAppointmentNameWithoutAnExplicitCommandVerb() {
+        val draft = OrbitCommandParser.parseSchedule("Reunião amanhã às 15:30")
+        requireNotNull(draft)
+        assertEquals("Reunião", draft.title)
+        assertEquals(dateAfter(1), draft.date)
+        assertEquals("15:30", draft.time)
+    }
+
 }
