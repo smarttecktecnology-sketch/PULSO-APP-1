@@ -14,7 +14,23 @@ android {
         versionName = "0.1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
-    buildFeatures { compose = true }
+    flavorDimensions += "edition"
+    productFlavors {
+        create("test") {
+            dimension = "edition"
+            applicationIdSuffix = ".test"
+            versionNameSuffix = "-test"
+            buildConfigField("boolean", "ORBIT_TEST_MODE", "true")
+        }
+        create("official") {
+            dimension = "edition"
+            buildConfigField("boolean", "ORBIT_TEST_MODE", "false")
+        }
+    }
+    buildFeatures {
+        compose = true
+        buildConfig = true
+    }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
