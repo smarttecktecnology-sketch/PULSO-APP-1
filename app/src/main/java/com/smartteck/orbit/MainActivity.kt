@@ -52,7 +52,7 @@ private val OrbitText = Color(0xFFF4F8FF)
 private val OrbitMuted = Color(0xFF9DB0C7)
 private val OrbitGreen = Color(0xFF45C99A)
 
-data class OrbitTask(val id: Long, val title: String, val dueDate: String, val done: Boolean)
+data class OrbitTask(val id: Long, val title: String, val dueDate: String, val done: Boolean, val reminderTime: String = "09:00")
 data class OrbitDocument(val uri: String, val name: String)
 
 class MainActivity : ComponentActivity() {
@@ -94,8 +94,8 @@ private fun OrbitApp() {
         }
     }
 
-    fun addTask(title: String, date: String) {
-        val task = OrbitTask(System.currentTimeMillis(), title.trim(), date.trim(), false)
+    fun addTask(title: String, date: String, time: String) {
+        val task = OrbitTask(System.currentTimeMillis(), title.trim(), date.trim(), false, time.trim())
         tasks = tasks + task
         saveTasks(context, tasks)
         scheduleOrbitReminder(context, task)
@@ -164,7 +164,7 @@ private fun OrbitApp() {
                 }
             }
         }
-        if (showTaskDialog) AddTaskDialog({ showTaskDialog = false }) { title, date -> addTask(title, date); showTaskDialog = false }
+        if (showTaskDialog) AddTaskDialog({ showTaskDialog = false }) { title, date, time -> addTask(title, date, time); showTaskDialog = false }
         if (showAssistant) AssistantDialog { showAssistant = false }
         }
     }
@@ -345,19 +345,33 @@ private fun TaskRow(task: OrbitTask, onToggle: (OrbitTask) -> Unit, onDelete: ((
 }
 
 @Composable
-private fun AddTaskDialog(onDismiss: () -> Unit, onSave: (String, String) -> Unit) {
-    var title by remember { mutableStateOf("") }; var date by remember { mutableStateOf("") }
+private fun AddTaskDialog(onDismiss: () -> Unit, onSave: (String, String, String) -> Unit) {
+    var title by remember { mutableStateOf("") }
+    var date by remember { mutableStateOf("") }
+    var time by remember { mutableStateOf("09:00") }
+    val validTime = Regex("^([01]?[0-9]|2[0-3]):[0-5][0-9]$").matches(time.trim())
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Nova tarefa", fontWeight = FontWeight.Bold) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 OutlinedTextField(title, { title = it }, label = { Text("O que precisa fazer?") }, singleLine = true)
-                OutlinedTextField(date, { date = it }, label = { Text("Data (opcional): AAAA-MM-DD") }, singleLine = true)
-                Text("Você pode deixar a data em branco e definir depois.", color = OrbitMuted, fontSize = 11.sp)
+                OutlinedTextField(date, { date = it }, label = { Text("Data: AAAA-MM-DD") }, singleLine = true)
+                OutlinedTextField(
+                    value = time,
+                    onValueChange = { time = it },
+                    label = { Text("Hora do lembrete (HH:mm)") },
+                    placeholder = { Text("09:00") },
+                    singleLine = true,
+                    isError = !validTime
+                )
+                Text("Escolha a hora em que deseja receber o aviso. Exemplo: 08:30.", color = OrbitMuted, fontSize = 11.sp)
+                if (date.isBlank()) Text("Informe uma data para ativar o lembrete.", color = OrbitMuted, fontSize = 11.sp)
             }
         },
-        confirmButton = { TextButton(onClick = { if (title.isNotBlank()) onSave(title, date) }, enabled = title.isNotBlank()) { Text("Salvar") } },
+        confirmButton = {
+            TextButton(onClick = { if (title.isNotBlank() && validTime) onSave(title, date, time) }, enabled = title.isNotBlank() && validTime) { Text("Salvar") }
+        },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } },
         containerColor = OrbitPanel, titleContentColor = OrbitText, textContentColor = OrbitText
     )
@@ -422,17 +436,19 @@ private fun scheduleOrbitReminder(context: Context, task: OrbitTask) {
         SimpleDateFormat("yyyy-MM-dd", Locale.US).apply { isLenient = false }.parse(task.dueDate)
     } catch (_: Exception) { null } ?: return
     val now = Calendar.getInstance()
+    val timeParts = task.reminderTime.split(":")
+    if (timeParts.size != 2) return
+    val hour = timeParts[0].toIntOrNull() ?: return
+    val minute = timeParts[1].toIntOrNull() ?: return
+    if (hour !in 0..23 || minute !in 0..59) return
     val due = Calendar.getInstance().apply {
         time = parsed
-        set(Calendar.HOUR_OF_DAY, 9); set(Calendar.MINUTE, 0)
+        set(Calendar.HOUR_OF_DAY, hour); set(Calendar.MINUTE, minute)
         set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
     }
     val today = now.get(Calendar.YEAR) == due.get(Calendar.YEAR) &&
         now.get(Calendar.DAY_OF_YEAR) == due.get(Calendar.DAY_OF_YEAR)
-    if (due.before(now)) {
-        if (!today) return
-        due.timeInMillis = now.timeInMillis + TimeUnit.MINUTES.toMillis(1)
-    }
+    if (due.before(now)) return
     val request = OneTimeWorkRequestBuilder<OrbitReminderWorker>()
         .setInitialDelay((due.timeInMillis - now.timeInMillis).coerceAtLeast(0L), TimeUnit.MILLISECONDS)
         .setInputData(workDataOf(
@@ -451,12 +467,12 @@ private fun loadTasks(context: Context): List<OrbitTask> = try {
     val array = JSONArray(context.getSharedPreferences("orbit_data", Context.MODE_PRIVATE).getString("tasks", "[]"))
     (0 until array.length()).map { i ->
         val o = array.getJSONObject(i)
-        OrbitTask(o.getLong("id"), o.getString("title"), o.optString("date"), o.optBoolean("done"))
+        OrbitTask(o.getLong("id"), o.getString("title"), o.optString("date"), o.optBoolean("done"), o.optString("reminderTime", "09:00"))
     }
 } catch (_: Exception) { emptyList() }
 private fun saveTasks(context: Context, tasks: List<OrbitTask>) {
     val array = JSONArray()
-    tasks.forEach { array.put(JSONObject().put("id", it.id).put("title", it.title).put("date", it.dueDate).put("done", it.done)) }
+    tasks.forEach { array.put(JSONObject().put("id", it.id).put("title", it.title).put("date", it.dueDate).put("done", it.done).put("reminderTime", it.reminderTime)) }
     context.getSharedPreferences("orbit_data", Context.MODE_PRIVATE).edit().putString("tasks", array.toString()).apply()
 }
 private fun loadDocuments(context: Context): List<OrbitDocument> = try {
