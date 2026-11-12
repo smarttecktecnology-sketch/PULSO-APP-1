@@ -22,6 +22,14 @@ jobs:
           gradle-version: '8.9'
       - name: Run unit tests
         run: gradle --no-daemon :app:testDebugUnitTest
+      - name: Run Android emulator smoke tests
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          profile: pixel_2
+          disable-animations: true
+          script: gradle --no-daemon :app:connectedDebugAndroidTest
       - name: Build debug APK
         run: gradle --no-daemon :app:assembleDebug
       - name: Upload APK
