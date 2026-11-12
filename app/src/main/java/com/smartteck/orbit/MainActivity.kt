@@ -503,35 +503,86 @@ private fun AssistantDialog(
     onCreateTask: (String) -> Unit
 ) {
     var prompt by remember { mutableStateOf("") }
-    var answer by remember { mutableStateOf("Olá! Posso consultar suas tarefas e ajudar a organizar sua rotina. Experimente perguntar: “Quantas tarefas estão pendentes?”") }
+    var answer by remember { mutableStateOf("Olá! Sou o assistente local do ORBIT. Posso consultar, pesquisar e organizar suas tarefas sem internet.") }
     var proposedTask by remember { mutableStateOf<String?>(null) }
+
+    fun normalize(value: String): String =
+        java.text.Normalizer.normalize(value.lowercase(Locale("pt", "BR")), java.text.Normalizer.Form.NFD)
+            .replace(Regex("\\p{Mn}+"), "").trim()
 
     fun processPrompt() {
         val question = prompt.trim()
         if (question.isBlank()) return
-        val normalized = question.lowercase(Locale("pt", "BR"))
+        val normalized = normalize(question)
+        val pending = tasks.filter { !it.done }
+        val today = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
         proposedTask = null
+
         answer = when {
-            normalized.contains("quantas") || normalized.contains("pendentes") || normalized.contains("resumo") -> {
-                val pending = tasks.count { !it.done }
-                val completed = tasks.count { it.done }
-                "Seu resumo: $pending tarefa(s) pendente(s) e $completed concluída(s). Você tem ${tasks.size} tarefa(s) cadastrada(s) no total."
-            }
-            normalized.contains("priorizar") || normalized.contains("organizar") || normalized.contains("meu dia") -> {
-                val next = tasks.filter { !it.done }.sortedWith(compareBy<OrbitTask>({ if (it.dueDate.isBlank()) "9999-99-99" else it.dueDate }, { it.reminderTime })).take(3)
-                if (next.isEmpty()) "Não há tarefas pendentes. Seu painel está livre no momento."
-                else "Sugestão de foco: comece por estas tarefas, considerando as datas cadastradas:\n" + next.mapIndexed { index, task -> "${index + 1}. ${task.title}" }.joinToString("\n")
-            }
-            normalized.startsWith("criar tarefa:") || normalized.startsWith("adicionar tarefa:") || normalized.startsWith("nova tarefa:") -> {
+            normalized.startsWith("criar tarefa:") ||
+                normalized.startsWith("adicionar tarefa:") ||
+                normalized.startsWith("nova tarefa:") -> {
                 val title = question.substringAfter(':').trim()
                 if (title.isBlank()) "Escreva o nome da tarefa depois dos dois-pontos."
                 else {
                     proposedTask = title
-                    "Preparei a tarefa “$title”. Revise e toque em Adicionar tarefa para salvá-la."
+                    "Preparei “$title”. Confira o nome e confirme para adicionar à sua lista."
                 }
             }
-            normalized.contains("ajuda") -> "Posso mostrar seu resumo, sugerir uma ordem para as tarefas ou preparar uma nova tarefa. Para preparar uma tarefa, escreva: criar tarefa: nome da tarefa."
-            else -> "No modo local, consigo consultar suas tarefas, sugerir prioridades e preparar novas tarefas. A conexão com um modelo de IA generativa ainda precisa de um serviço seguro no servidor."
+            normalized.contains("resumo") || normalized.contains("quantas") ||
+                normalized.contains("situacao") || normalized.contains("pendentes") -> {
+                val completed = tasks.count { it.done }
+                val overdue = pending.count { it.dueDate.length == 10 && it.dueDate < today }
+                val todayCount = pending.count { it.dueDate == today }
+                "Resumo do ORBIT:\n• ${pending.size} pendente(s)\n• $completed concluída(s)\n• $overdue atrasada(s)\n• $todayCount para hoje\n• ${tasks.size} tarefa(s) no total."
+            }
+            normalized.contains("hoje") -> {
+                val todays = pending.filter { it.dueDate == today }
+                if (todays.isEmpty()) "Você não tem tarefas pendentes com data marcada para hoje."
+                else "Tarefas de hoje:\n" + todays.joinToString("\n") { "• ${it.title} — ${it.reminderTime}" }
+            }
+            normalized.contains("atrasad") -> {
+                val overdue = pending.filter { it.dueDate.length == 10 && it.dueDate < today }
+                if (overdue.isEmpty()) "Você não tem tarefas atrasadas."
+                else "Estas tarefas estão atrasadas:\n" + overdue.joinToString("\n") { "• ${it.title} — ${it.dueDate}" }
+            }
+            normalized.startsWith("buscar:") || normalized.startsWith("procurar:") ||
+                normalized.startsWith("encontrar:") -> {
+                val term = normalize(question.substringAfter(':'))
+                val matches = tasks.filter { normalize(it.title).contains(term) }
+                if (term.isBlank()) "Digite o que deseja procurar depois de “buscar:”."
+                else if (matches.isEmpty()) "Não encontrei nenhuma tarefa com esse termo."
+                else "Encontrei ${matches.size} resultado(s):\n" + matches.take(8).joinToString("\n") {
+                    "• ${it.title} — " + if (it.done) "concluída" else "pendente"
+                }
+            }
+            normalized.contains("priorizar") || normalized.contains("organizar") ||
+                normalized.contains("meu dia") || normalized.contains("proxima tarefa") -> {
+                val ordered = pending.sortedWith(compareBy<OrbitTask>(
+                    { if (it.dueDate.length == 10 && it.dueDate < today) 0 else if (it.dueDate.isBlank()) 2 else 1 },
+                    { if (it.dueDate.isBlank()) "9999-99-99" else it.dueDate },
+                    { it.reminderTime }
+                )).take(5)
+                if (ordered.isEmpty()) "Não há tarefas pendentes. Seu painel está livre!"
+                else "Sugestão de prioridades:\n" + ordered.mapIndexed { index, task ->
+                    val status = when {
+                        task.dueDate.length == 10 && task.dueDate < today -> " • atrasada"
+                        task.dueDate == today -> " • hoje às ${task.reminderTime}"
+                        task.dueDate.isNotBlank() -> " • ${task.dueDate}"
+                        else -> " • sem data"
+                    }
+                    "${index + 1}. ${task.title}$status"
+                }.joinToString("\n")
+            }
+            normalized.contains("concluid") || normalized.contains("finalizad") -> {
+                val completed = tasks.filter { it.done }
+                if (completed.isEmpty()) "Ainda não há tarefas concluídas."
+                else "Tarefas concluídas:\n" + completed.take(8).joinToString("\n") { "• ${it.title}" }
+            }
+            normalized.contains("ajuda") || normalized == "oi" || normalized == "ola" ->
+                "Você pode me pedir:\n• resumo das tarefas\n• o que tenho para hoje?\n• mostrar atrasadas\n• priorizar meu dia\n• buscar: estudo\n• criar tarefa: estudar matemática"
+            else ->
+                "Ainda não reconheço esse pedido. Estou funcionando totalmente no aparelho, sem servidor e sem internet. Toque em Ajuda para ver os comandos disponíveis."
         }
         prompt = ""
     }
@@ -543,29 +594,39 @@ private fun AssistantDialog(
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(11.dp)) {
                 Surface(color = OrbitBlue.copy(alpha = .13f), shape = RoundedCornerShape(12.dp)) {
-                    Text("MODO LOCAL • BETA", color = OrbitCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp))
+                    Text("100% LOCAL • OFFLINE", color = OrbitCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp))
                 }
                 Text(answer, color = OrbitText, fontSize = 13.sp)
                 if (proposedTask != null) {
                     Button(
-                        onClick = { onCreateTask(proposedTask!!); proposedTask = null; answer = "Tarefa adicionada à sua lista. Você pode definir a data e o lembrete na tela Tarefas." },
+                        onClick = {
+                            onCreateTask(proposedTask!!)
+                            proposedTask = null
+                            answer = "Tarefa adicionada. Você pode definir a data e o horário do lembrete na tela Tarefas."
+                        },
                         modifier = Modifier.fillMaxWidth(),
                         colors = ButtonDefaults.buttonColors(containerColor = OrbitBlue)
-                    ) { Icon(Icons.Default.Add, null); Spacer(Modifier.width(6.dp)); Text("Adicionar tarefa") }
+                    ) { Icon(Icons.Default.Add, null); Spacer(Modifier.width(6.dp)); Text("Confirmar e adicionar") }
                 }
                 OutlinedTextField(
                     value = prompt,
                     onValueChange = { prompt = it },
                     modifier = Modifier.fillMaxWidth(),
-                    label = { Text("Pergunte ao ORBIT") },
-                    placeholder = { Text("Ex.: Quantas tarefas estão pendentes?") },
+                    label = { Text("Converse com o ORBIT") },
+                    placeholder = { Text("Ex.: priorizar meu dia") },
                     minLines = 2,
                     maxLines = 4
                 )
-                Button(onClick = { processPrompt() }, enabled = prompt.isNotBlank(), modifier = Modifier.fillMaxWidth()) {
-                    Icon(Icons.Default.Send, null); Spacer(Modifier.width(7.dp)); Text("Enviar")
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = {
+                        proposedTask = null
+                        answer = "Comandos disponíveis:\n• resumo das tarefas\n• o que tenho para hoje?\n• mostrar atrasadas\n• priorizar meu dia\n• buscar: palavra\n• criar tarefa: nome"
+                    }, modifier = Modifier.weight(1f)) { Text("Ajuda") }
+                    Button(onClick = { processPrompt() }, enabled = prompt.isNotBlank(), modifier = Modifier.weight(1f)) {
+                        Icon(Icons.Default.Send, null); Spacer(Modifier.width(7.dp)); Text("Enviar")
+                    }
                 }
-                Text("Ações que alteram seus dados só acontecem após sua confirmação. A IA generativa online ainda não está conectada.", color = OrbitMuted, fontSize = 10.sp)
+                Text("Seus dados permanecem no aparelho. O assistente usa comandos locais; não envia suas tarefas para a internet.", color = OrbitMuted, fontSize = 10.sp)
             }
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text("Fechar") } },
