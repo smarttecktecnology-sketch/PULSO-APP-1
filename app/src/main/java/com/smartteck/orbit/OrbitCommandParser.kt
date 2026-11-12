@@ -67,9 +67,15 @@ object OrbitCommandParser {
         return timeWithUnit.containsMatchIn(normalized) || hourAfterAs.containsMatchIn(normalized)
     }
 
+    fun hasExplicitDate(command: String): Boolean =
+        parseDate(normalize(command)) != null
+
     fun parseSchedule(command: String): OrbitScheduleDraft? {
         val normalized = normalize(command)
-        if (!hasSchedulingIntent(command)) return null
+        // Também aceita descrições naturais sem verbo de comando, como
+        // "dentista amanhã às 14h" ou "prova sexta às 8h".
+        if (!hasSchedulingIntent(command) &&
+            !(hasExplicitDate(command) && hasExplicitTime(command))) return null
 
         val date = parseDate(normalized) ?: return null
         val timeMatch = timeWithUnit.find(normalized) ?: hourAfterAs.find(normalized) ?: return null
