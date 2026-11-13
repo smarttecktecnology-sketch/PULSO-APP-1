@@ -12,8 +12,9 @@ import com.android.billingclient.api.QueryProductDetailsParams
 import com.android.billingclient.api.QueryPurchasesParams
 
 /**
- * Google Play subscription client. Product IDs must exist in Play Console.
- * Purchases are queried on-device; production release should add server-side verification.
+ * Google Play billing client for the single paid subscription: ORBIT MAX.
+ * Product ID must match the subscription configured in Play Console.
+ * Production release should add server-side purchase verification.
  */
 class OrbitBillingManager(
     context: Context,
@@ -27,7 +28,6 @@ class OrbitBillingManager(
     ) -> Unit
 ) {
     companion object {
-        const val PLUS_PRODUCT_ID = "orbit_plus_monthly"
         const val MAX_PRODUCT_ID = "orbit_max_monthly"
     }
 
@@ -72,29 +72,26 @@ class OrbitBillingManager(
     }
 
     private fun loadProductsAndPurchases() {
-        val productList = listOf(PLUS_PRODUCT_ID, MAX_PRODUCT_ID).map { id ->
-            QueryProductDetailsParams.Product.newBuilder()
-                .setProductId(id)
-                .setProductType(BillingClient.ProductType.SUBS)
-                .build()
-        }
+        val product = QueryProductDetailsParams.Product.newBuilder()
+            .setProductId(MAX_PRODUCT_ID)
+            .setProductType(BillingClient.ProductType.SUBS)
+            .build()
         products.clear()
         offers.clear()
-        val params = QueryProductDetailsParams.newBuilder().setProductList(productList).build()
+        val params = QueryProductDetailsParams.newBuilder().setProductList(listOf(product)).build()
         billingClient.queryProductDetailsAsync(params) { result, detailsResult ->
             if (result.responseCode == BillingClient.BillingResponseCode.OK) {
                 detailsResult.productDetailsList.forEach { details ->
                     products[details.productId] = details
                     details.subscriptionOfferDetails?.firstOrNull()?.offerToken?.let { offers[details.productId] = it }
                 }
-                val missing = listOf(PLUS_PRODUCT_ID, MAX_PRODUCT_ID).filter { !isReady(it) }
-                emit(if (missing.isEmpty()) {
-                    "Planos ORBIT PLUS e ORBIT MAX encontrados no Google Play."
+                emit(if (isReady(MAX_PRODUCT_ID)) {
+                    "ORBIT MAX encontrado no Google Play."
                 } else {
-                    "Configure no Google Play Console os produtos: ${missing.joinToString()}."
+                    "Configure o produto $MAX_PRODUCT_ID no Google Play Console."
                 })
             } else {
-                emit("Não foi possível consultar os planos: ${result.debugMessage}")
+                emit("Não foi possível consultar o ORBIT MAX: ${result.debugMessage}")
             }
         }
         refreshPurchases()
@@ -110,34 +107,24 @@ class OrbitBillingManager(
             .build()
         billingClient.queryPurchasesAsync(params) { result, purchases ->
             if (result.responseCode == BillingClient.BillingResponseCode.OK) {
-                activeTier = purchases
-                    .filter { it.purchaseState == Purchase.PurchaseState.PURCHASED }
-                    .let { owned ->
-                        when {
-                            owned.any { it.products.contains(MAX_PRODUCT_ID) } -> OrbitPlanTier.MAX
-                            owned.any { it.products.contains(PLUS_PRODUCT_ID) } -> OrbitPlanTier.PLUS
-                            else -> OrbitPlanTier.FREE
-                        }
-                    }
+                activeTier = if (purchases.any {
+                    it.purchaseState == Purchase.PurchaseState.PURCHASED && it.products.contains(MAX_PRODUCT_ID)
+                }) OrbitPlanTier.MAX else OrbitPlanTier.FREE
                 purchases.filter { it.purchaseState == Purchase.PurchaseState.PURCHASED && !it.isAcknowledged }
                     .forEach { processPurchase(it) }
-                emit(if (activeTier == OrbitPlanTier.FREE) "Você está no ORBIT FREE." else "Assinatura ORBIT ativa nesta conta Google Play.")
+                emit(if (activeTier == OrbitPlanTier.FREE) "Você está usando o acesso sem assinatura." else "Assinatura ORBIT MAX ativa nesta conta Google Play.")
             } else {
-                emit("Não foi possível atualizar as assinaturas: ${result.debugMessage}")
+                emit("Não foi possível atualizar a assinatura: ${result.debugMessage}")
             }
         }
     }
 
     fun launchPurchase(activity: Activity, tier: OrbitPlanTier) {
-        val productId = when (tier) {
-            OrbitPlanTier.PLUS -> PLUS_PRODUCT_ID
-            OrbitPlanTier.MAX -> MAX_PRODUCT_ID
-            OrbitPlanTier.FREE -> return
-        }
-        val details = products[productId]
-        val token = offers[productId]
+        if (tier != OrbitPlanTier.MAX) return
+        val details = products[MAX_PRODUCT_ID]
+        val token = offers[MAX_PRODUCT_ID]
         if (!billingClient.isReady || details == null || token == null) {
-            emit("Este plano ainda não está disponível. Confira se o produto mensal foi publicado no Google Play Console.")
+            emit("ORBIT MAX ainda não está disponível. Confira se o produto mensal foi publicado no Google Play Console.")
             connect()
             return
         }
@@ -155,15 +142,14 @@ class OrbitBillingManager(
     }
 
     private fun processPurchase(purchase: Purchase) {
-        if (!purchase.products.contains(PLUS_PRODUCT_ID) && !purchase.products.contains(MAX_PRODUCT_ID)) return
+        if (!purchase.products.contains(MAX_PRODUCT_ID)) return
         if (purchase.purchaseState != Purchase.PurchaseState.PURCHASED) {
             emit("Aguardando confirmação do pagamento no Google Play.")
             return
         }
-        if (purchase.products.contains(MAX_PRODUCT_ID)) activeTier = OrbitPlanTier.MAX
-        else if (activeTier != OrbitPlanTier.MAX) activeTier = OrbitPlanTier.PLUS
+        activeTier = OrbitPlanTier.MAX
         if (purchase.isAcknowledged) {
-            emit("Assinatura ORBIT confirmada pelo Google Play.")
+            emit("Assinatura ORBIT MAX confirmada pelo Google Play.")
             return
         }
         val params = AcknowledgePurchaseParams.newBuilder()
@@ -171,7 +157,7 @@ class OrbitBillingManager(
             .build()
         billingClient.acknowledgePurchase(params) { result ->
             if (result.responseCode == BillingClient.BillingResponseCode.OK) {
-                emit("Assinatura ORBIT confirmada pelo Google Play.")
+                emit("Assinatura ORBIT MAX confirmada pelo Google Play.")
                 refreshPurchases()
             } else {
                 emit("Compra recebida; aguardando confirmação do Google Play.")
@@ -188,8 +174,8 @@ class OrbitBillingManager(
     private fun emit(status: String) {
         onState(
             activeTier, status,
-            formattedPrice(PLUS_PRODUCT_ID), formattedPrice(MAX_PRODUCT_ID),
-            isReady(PLUS_PRODUCT_ID), isReady(MAX_PRODUCT_ID)
+            null, formattedPrice(MAX_PRODUCT_ID),
+            false, isReady(MAX_PRODUCT_ID)
         )
     }
 
