@@ -90,6 +90,23 @@ object OrbitCommandParser {
     fun hasExplicitDate(command: String): Boolean =
         parseDate(normalize(command)) != null
 
+    /** Extracts a date or time even when the user has supplied only part of a request. */
+    fun parseExplicitDate(command: String): String? = parseDate(normalize(command))
+
+    fun parseExplicitTime(command: String): String? {
+        val normalized = normalize(command)
+        val match = timeWithUnit.find(normalized) ?: hourAfterAs.find(normalized) ?: return null
+        var hour = match.groups[1]?.value?.toIntOrNull() ?: return null
+        val minute = (match.groups[2]?.value ?: match.groups[3]?.value ?: "0").toIntOrNull() ?: return null
+        val suffix = normalized.substring(match.range.last + 1).trimStart()
+        when {
+            suffix.startsWith("da noite") || suffix.startsWith("da tarde") -> if (hour in 1..11) hour += 12
+            suffix.startsWith("da manha") && hour == 12 -> hour = 0
+        }
+        if (hour !in 0..23 || minute !in 0..59) return null
+        return "%02d:%02d".format(Locale.US, hour, minute)
+    }
+
     fun parseSchedule(command: String): OrbitScheduleDraft? {
         val normalized = normalize(command)
         // Também aceita descrições naturais sem verbo de comando, como
