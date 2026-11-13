@@ -287,6 +287,14 @@ private fun OrbitApp() {
                         },
                         onBack = { page = OrbitPage.HOME }
                     )
+                    OrbitPage.NOTIFICATIONS -> NotificationHistoryScreen(
+                        entries = loadOrbitNotificationHistory(context),
+                        onClear = {
+                            context.getSharedPreferences("orbit_data", Context.MODE_PRIVATE).edit().putString("notification_history", "[]").apply()
+                            page = OrbitPage.NOTIFICATIONS
+                        },
+                        onBack = { page = OrbitPage.SETTINGS }
+                    )
                     OrbitPage.SETTINGS -> OrbitSettingsScreen(
                         effectiveTier, voiceRemindersEnabled,
                         onVoiceChanged = { enabled ->
@@ -296,6 +304,9 @@ private fun OrbitApp() {
                                 Toast.makeText(context, if (enabled) "Lembretes por voz ativados" else "Lembretes por voz desativados", Toast.LENGTH_SHORT).show()
                             }
                         },
+                        onHistory = { page = OrbitPage.NOTIFICATIONS },
+                        onBackup = { backupExporter.launch("smart-orbit-backup.json") },
+                        onRestore = { backupImporter.launch(arrayOf("application/json", "text/*")) },
                         onBack = { page = OrbitPage.HOME }
                     )
                 }
