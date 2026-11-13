@@ -114,4 +114,24 @@ class OrbitTaskTimeTest {
         )
     }
 
+    @Test
+    fun rejectsUnknownRecurrenceInsteadOfDuplicatingTheSameDate() {
+        assertTrue(orbitRecurrenceDates("2026-11-12", "yearly").isEmpty())
+        assertTrue(orbitRecurrenceDates("2026-11-12", "daily", 0).isEmpty())
+    }
+
+    @Test
+    fun voiceRemindersAreAvailableInTestEditionWhenUserEnablesThem() {
+        assertTrue(orbitVoiceReminderAllowed(true, OrbitPlanTier.FREE.name, true, true))
+    }
+
+    @Test
+    fun voiceRemindersRequireEligiblePlanAndBothSwitchesInOfficialEdition() {
+        assertFalse(orbitVoiceReminderAllowed(false, OrbitPlanTier.FREE.name, true, true))
+        assertFalse(orbitVoiceReminderAllowed(false, OrbitPlanTier.PLUS.name, false, true))
+        assertFalse(orbitVoiceReminderAllowed(false, OrbitPlanTier.MAX.name, true, false))
+        assertTrue(orbitVoiceReminderAllowed(false, OrbitPlanTier.PLUS.name, true, true))
+        assertTrue(orbitVoiceReminderAllowed(false, OrbitPlanTier.MAX.name, true, true))
+    }
+
 }
