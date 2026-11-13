@@ -1039,7 +1039,9 @@ private fun buildOrbitBackup(context: Context): String {
         .toString(2)
 }
 
-private fun parseOrbitBackup(raw: String): List<OrbitTask> {
+private data class OrbitBackupData(val tasks: List<OrbitTask>, val notificationHistory: String)
+
+private fun parseOrbitBackup(raw: String): OrbitBackupData {
     val root = JSONObject(raw)
     require(root.optString("app") == "SMART_ORBIT" && root.optInt("schemaVersion") == 1)
     val array = root.getJSONArray("tasks")
@@ -1056,7 +1058,9 @@ private fun parseOrbitBackup(raw: String): List<OrbitTask> {
         require(date.matches(Regex("\\d{4}-\\d{2}-\\d{2}")) && time.matches(Regex("\\d{2}:\\d{2}")))
         restored.add(OrbitTask(id, title, date, item.optBoolean("done"), time, item.optInt("reminderLeadMinutes", 0).coerceIn(0, 1440)))
     }
-    return restored
+    val history = root.optJSONArray("notificationHistory") ?: JSONArray()
+    require(history.length() <= 100)
+    return OrbitBackupData(restored, history.toString())
 }
 
 @Composable
