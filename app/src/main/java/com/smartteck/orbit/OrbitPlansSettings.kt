@@ -163,9 +163,15 @@ fun OrbitSettingsScreen(
                         OrbitPlanTier.PLUS -> "ORBIT PLUS"
                         OrbitPlanTier.MAX -> "ORBIT MAX"
                     }, color = PlansText, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold)
-                    Text("FREE: tarefas e lembretes manuais, agenda, notificações padrão e arquivos.", color = PlansMuted, fontSize = 12.sp)
-                    Text("PLUS: tudo do FREE, lembretes falados e agendamentos recorrentes diários, semanais ou mensais (até 12 ocorrências).", color = PlansMuted, fontSize = 12.sp)
-                    Text("MAX: tudo do PLUS, assistente de IA, agendamento por conversa, detecção de conflitos e painel de progresso diário, semanal, mensal e anual.", color = PlansMuted, fontSize = 12.sp)
+                    Text(
+                        when (activeTier) {
+                            OrbitPlanTier.FREE -> "Você está usando os recursos essenciais: tarefas, agenda, arquivos e notificações."
+                            OrbitPlanTier.PLUS -> "Seu plano inclui lembretes por voz e agendamentos recorrentes."
+                            OrbitPlanTier.MAX -> "Seu plano inclui todos os recursos, assistente de IA e painel de progresso."
+                        },
+                        color = PlansMuted,
+                        fontSize = 12.sp
+                    )
                 }
             }
         }
