@@ -34,7 +34,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 // FREE representa o uso sem assinatura; ORBIT MAX é a única assinatura paga.
-enum class OrbitPlanTier { FREE, PLUS, MAX }
+enum class OrbitPlanTier { FREE, MAX }
 
 private val PlansBg = Color(0xFF071321)
 private val PlansPanel = Color(0xFF10243A)
