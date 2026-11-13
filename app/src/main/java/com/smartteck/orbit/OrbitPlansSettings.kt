@@ -141,6 +141,9 @@ fun OrbitSettingsScreen(
     activeTier: OrbitPlanTier,
     voiceEnabled: Boolean,
     onVoiceChanged: (Boolean) -> Unit,
+    onHistory: () -> Unit,
+    onBackup: () -> Unit,
+    onRestore: () -> Unit,
     onBack: () -> Unit
 ) {
     val voiceAvailable = activeTier == OrbitPlanTier.PLUS || activeTier == OrbitPlanTier.MAX
@@ -198,5 +201,18 @@ fun OrbitSettingsScreen(
                 }
             }
         }
+        item {
+            Card(colors = CardDefaults.cardColors(containerColor = PlansPanel), shape = RoundedCornerShape(18.dp)) {
+                Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                    Text("DADOS E PRIVACIDADE", color = PlansCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    Text("Seu histórico e seus backups ficam armazenados localmente no aparelho.", color = PlansMuted, fontSize = 11.sp)
+                    Button(onClick = onHistory, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = PlansPanel2)) { Icon(Icons.Default.History, null); Spacer(Modifier.width(8.dp)); Text("Histórico de notificações") }
+                    Button(onClick = onBackup, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = PlansBlue)) { Icon(Icons.Default.Backup, null); Spacer(Modifier.width(8.dp)); Text("Exportar backup") }
+                    Button(onClick = onRestore, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = PlansPanel2)) { Icon(Icons.Default.Restore, null); Spacer(Modifier.width(8.dp)); Text("Restaurar backup") }
+                    Text("O backup inclui tarefas e histórico de notificações. Os arquivos anexados permanecem nos locais originais do dispositivo.", color = PlansMuted, fontSize = 10.sp)
+                }
+            }
+        }
+
     }
 }
