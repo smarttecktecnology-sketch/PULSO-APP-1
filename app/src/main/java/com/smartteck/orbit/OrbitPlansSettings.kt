@@ -73,23 +73,23 @@ fun OrbitPlansScreen(
         item {
             PlanCard(
                 name = "ORBIT FREE", price = "R$ 0,00", description = "Para começar a organizar sua rotina.",
-                features = listOf("Criar tarefas manualmente", "Criar lembretes manualmente", "Definir datas e horários", "Consultar agenda e compromissos"),
+                features = listOf("Criar tarefas e lembretes manualmente", "Definir datas e horários", "Consultar agenda e compromissos", "Acompanhar tarefas pendentes e concluídas", "Guardar arquivos e documentos no app", "Receber notificações no horário programado"),
                 current = activeTier == OrbitPlanTier.FREE, buttonLabel = if (activeTier == OrbitPlanTier.FREE) "PLANO ATUAL" else "SELECIONAR",
                 enabled = false, accent = PlansCyan, onClick = {}
             )
         }
         item {
             PlanCard(
-                name = "ORBIT PLUS", price = plusPrice ?: "R$ 10,00 / mês", description = "Mais recursos para sua rotina.",
-                features = listOf("Todos os recursos do FREE", "Lembretes falados por voz", "Personalização de avisos", "Mais opções de organização", "Histórico ampliado"),
+                name = "ORBIT PLUS", price = plusPrice ?: "R$ 9,90 / mês", description = "Mais praticidade e lembretes que falam com você.",
+                features = listOf("Todos os recursos do FREE", "Lembretes falados pelo aparelho", "Ativar ou desativar a voz nas configurações", "Avisos falados no horário programado", "Mais conforto para acompanhar compromissos sem precisar olhar a tela"),
                 current = activeTier == OrbitPlanTier.PLUS, buttonLabel = if (activeTier == OrbitPlanTier.PLUS) "PLANO ATUAL" else "ASSINAR",
                 enabled = activeTier != OrbitPlanTier.PLUS, accent = PlansCyan, onClick = { onSubscribe(OrbitPlanTier.PLUS) }
             )
         }
         item {
             PlanCard(
-                name = "ORBIT MAX", price = maxPrice ?: "R$ 49,90 / mês", description = "A experiência completa do SMART ORBIT.",
-                features = listOf("Todos os recursos do PLUS", "Assistente de IA por conversa", "Criar, editar e cancelar agendamentos pelo chat", "Identificação de conflitos de horário", "Planejamento semanal inteligente"),
+                name = "ORBIT MAX", price = maxPrice ?: "R$ 49,90 / mês", description = "O assistente inteligente e o controle avançado da sua rotina.",
+                features = listOf("Todos os recursos do PLUS", "Assistente ORBIT por conversa com IA", "Criar agendamentos usando linguagem natural", "Editar e cancelar agendamentos pelo chat", "Detectar conflitos de data e horário antes de confirmar", "Agendamentos recorrentes pelo assistente", "Painel exclusivo de progresso: hoje, semana, mês e ano"),
                 current = activeTier == OrbitPlanTier.MAX, buttonLabel = if (activeTier == OrbitPlanTier.MAX) "PLANO ATUAL" else "ASSINAR",
                 enabled = activeTier != OrbitPlanTier.MAX, accent = PlansGold, onClick = { onSubscribe(OrbitPlanTier.MAX) }
             )
@@ -163,9 +163,9 @@ fun OrbitSettingsScreen(
                         OrbitPlanTier.PLUS -> "ORBIT PLUS"
                         OrbitPlanTier.MAX -> "ORBIT MAX"
                     }, color = PlansText, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold)
-                    Text("FREE: tarefas e lembretes manuais, datas, horários e agenda.", color = PlansMuted, fontSize = 12.sp)
-                    Text("PLUS: tudo do FREE, lembretes falados, avisos personalizados e histórico ampliado.", color = PlansMuted, fontSize = 12.sp)
-                    Text("MAX: tudo do PLUS, assistente de IA e planejamento inteligente.", color = PlansMuted, fontSize = 12.sp)
+                    Text("FREE: tarefas e lembretes manuais, agenda, notificações padrão e arquivos.", color = PlansMuted, fontSize = 12.sp)
+                    Text("PLUS: tudo do FREE e lembretes falados, com controle de voz nas configurações.", color = PlansMuted, fontSize = 12.sp)
+                    Text("MAX: tudo do PLUS, assistente de IA, agendamento por conversa, detecção de conflitos e painel de progresso diário, semanal, mensal e anual.", color = PlansMuted, fontSize = 12.sp)
                 }
             }
         }
