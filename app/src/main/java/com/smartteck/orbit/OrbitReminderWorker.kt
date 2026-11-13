@@ -20,6 +20,18 @@ import androidx.core.content.ContextCompat
 import androidx.work.Worker
 import androidx.work.WorkerParameters
 
+internal fun orbitVoiceReminderAllowed(
+    isTestMode: Boolean,
+    savedPlan: String?,
+    voiceSettingEnabled: Boolean,
+    reminderVoiceEnabled: Boolean
+): Boolean {
+    val eligiblePlan = isTestMode ||
+        savedPlan == OrbitPlanTier.PLUS.name ||
+        savedPlan == OrbitPlanTier.MAX.name
+    return reminderVoiceEnabled && voiceSettingEnabled && eligiblePlan
+}
+
 class OrbitReminderWorker(context: Context, params: WorkerParameters) : Worker(context, params) {
     override fun doWork(): Result {
         val title = inputData.getString(KEY_TITLE) ?: "Tarefa pendente"
@@ -90,11 +102,12 @@ class OrbitReminderWorker(context: Context, params: WorkerParameters) : Worker(c
 
     private fun isVoiceReminderAllowed(): Boolean {
         val settings = applicationContext.getSharedPreferences("orbit_settings", Context.MODE_PRIVATE)
-        val savedPlan = settings.getString("active_plan", OrbitPlanTier.FREE.name)
-        val eligiblePlan = savedPlan == OrbitPlanTier.PLUS.name || savedPlan == OrbitPlanTier.MAX.name
-        return inputData.getBoolean(KEY_VOICE_ENABLED, false) &&
-            settings.getBoolean("voice_reminders", false) &&
-            eligiblePlan
+        return orbitVoiceReminderAllowed(
+            isTestMode = BuildConfig.ORBIT_TEST_MODE,
+            savedPlan = settings.getString("active_plan", OrbitPlanTier.FREE.name),
+            voiceSettingEnabled = settings.getBoolean("voice_reminders", false),
+            reminderVoiceEnabled = inputData.getBoolean(KEY_VOICE_ENABLED, false)
+        )
     }
 
     private fun speakReminder(message: String) {
