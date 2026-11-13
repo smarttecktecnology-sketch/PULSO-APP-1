@@ -168,11 +168,11 @@ private fun OrbitApp() {
         }
     }
     fun updateTask(updated: OrbitTask) {
-        if (updated.title.isBlank() || orbitLocalDateTimeMillis(updated.dueDate, updated.reminderTime)?.let { it > System.currentTimeMillis() } != true) {
+        if (updated.title.isBlank() || (!updated.done && orbitLocalDateTimeMillis(updated.dueDate, updated.reminderTime)?.let { it > System.currentTimeMillis() } != true)) {
             Toast.makeText(context, "Confira o nome, a data e o horário futuro do compromisso.", Toast.LENGTH_LONG).show()
             return
         }
-        val conflicts = orbitConflictingScheduleDates(
+        val conflicts = if (updated.done) emptySet() else orbitConflictingScheduleDates(
             tasks, listOf(updated.dueDate), updated.reminderTime, excludingTaskId = updated.id
         )
         if (conflicts.isNotEmpty()) {
