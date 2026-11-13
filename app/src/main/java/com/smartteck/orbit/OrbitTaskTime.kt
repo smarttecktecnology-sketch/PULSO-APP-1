@@ -38,6 +38,9 @@ internal object OrbitTaskTime {
  * Dates are stored in the same yyyy-MM-dd format used by the task repository.
  */
 internal fun orbitRecurrenceDates(date: String, recurrence: String, count: Int = 12): List<String> {
+    if (recurrence !in setOf("once", "daily", "weekly", "monthly")) return emptyList()
+    if (count < 1) return emptyList()
+
     val parser = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply {
         isLenient = false
         timeZone = java.util.TimeZone.getTimeZone("UTC")
