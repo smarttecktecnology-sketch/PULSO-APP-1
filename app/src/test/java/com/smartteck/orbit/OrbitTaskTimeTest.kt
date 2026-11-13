@@ -86,7 +86,7 @@ class OrbitTaskTimeTest {
             OrbitTask(4L, "Outro dia", "2026-11-21", false, "10:00")
         )
         assertEquals(
-            setOf("2026-11-20"),
+            setOf("2026-11-20", "2026-11-21"),
             orbitConflictingScheduleDates(tasks, listOf("2026-11-20", "2026-11-21"), "10:00")
         )
     }
