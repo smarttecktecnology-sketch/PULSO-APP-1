@@ -80,8 +80,8 @@ fun OrbitPlansScreen(
         }
         item {
             PlanCard(
-                name = "ORBIT PLUS", price = plusPrice ?: "R$ 9,90 / mês", description = "Mais praticidade e lembretes que falam com você.",
-                features = listOf("Todos os recursos do FREE", "Lembretes falados pelo aparelho", "Ativar ou desativar a voz nas configurações", "Avisos falados no horário programado", "Mais conforto para acompanhar compromissos sem precisar olhar a tela"),
+                name = "ORBIT PLUS", price = plusPrice ?: "R$ 9,90 / mês", description = "Mais controle da rotina, recorrência e lembretes por voz.",
+                features = listOf("Todos os recursos do FREE", "Lembretes falados pelo aparelho, com controle para ativar ou desativar", "Criar compromissos que se repetem diariamente, semanalmente ou mensalmente", "Gerar até 12 ocorrências recorrentes por agendamento", "Evitar horários ocupados ao criar recorrências", "Mais praticidade para organizar rotinas frequentes"),
                 current = activeTier == OrbitPlanTier.PLUS, buttonLabel = if (activeTier == OrbitPlanTier.PLUS) "PLANO ATUAL" else "ASSINAR",
                 enabled = activeTier != OrbitPlanTier.PLUS, accent = PlansCyan, onClick = { onSubscribe(OrbitPlanTier.PLUS) }
             )
@@ -164,7 +164,7 @@ fun OrbitSettingsScreen(
                         OrbitPlanTier.MAX -> "ORBIT MAX"
                     }, color = PlansText, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold)
                     Text("FREE: tarefas e lembretes manuais, agenda, notificações padrão e arquivos.", color = PlansMuted, fontSize = 12.sp)
-                    Text("PLUS: tudo do FREE e lembretes falados, com controle de voz nas configurações.", color = PlansMuted, fontSize = 12.sp)
+                    Text("PLUS: tudo do FREE, lembretes falados e agendamentos recorrentes diários, semanais ou mensais (até 12 ocorrências).", color = PlansMuted, fontSize = 12.sp)
                     Text("MAX: tudo do PLUS, assistente de IA, agendamento por conversa, detecção de conflitos e painel de progresso diário, semanal, mensal e anual.", color = PlansMuted, fontSize = 12.sp)
                 }
             }
