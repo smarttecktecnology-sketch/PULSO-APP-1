@@ -181,6 +181,14 @@ class OrbitCommandParserTest {
     }
 
     @Test
+    fun parsedScheduleKeepsOnlyTheAppointmentNameForAfternoonHourPhrases() {
+        val draft = OrbitCommandParser.parseSchedule("consulta amanhã às 3 da tarde")
+        requireNotNull(draft)
+        assertEquals("Consulta", draft.title)
+        assertEquals("15:00", draft.time)
+    }
+
+    @Test
     fun suggestedTitleRemovesPortugueseDateAndHourPhrases() {
         assertEquals("Consulta", OrbitCommandParser.suggestTitle("consulta amanhã às 3 da tarde"))
     }
