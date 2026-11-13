@@ -80,9 +80,9 @@ fun OrbitPremiumDialog(
         confirmButton = {
             Button(
                 onClick = onPurchase,
-                enabled = isPremium.not() && productReady && false,
+                enabled = isPremium.not() && productReady,
                 colors = ButtonDefaults.buttonColors(containerColor = PremiumBlue)
-            ) { Icon(Icons.Default.Lock, null); Text("ORBIT MAX em preparação") }
+            ) { Icon(Icons.Default.Lock, null); Text("Assinar ORBIT MAX") }
         },
         dismissButton = {
             Row {
