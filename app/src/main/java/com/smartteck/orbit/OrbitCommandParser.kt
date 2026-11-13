@@ -152,7 +152,7 @@ object OrbitCommandParser {
         title = title.replace(Regex("(?i)\\bdia\\s+\\d{1,2}/\\d{1,2}(?:/\\d{2,4})?\\b"), "")
         title = title.replace(Regex("(?i)\\b(hoje|amanh[ãa]|segunda(-feira)?|ter[cç]a(-feira)?|quarta(-feira)?|quinta(-feira)?|sexta(-feira)?|s[áa]bado|domingo)\\b"), "")
         title = title.replace(Regex("\\b\\d{1,2}/\\d{1,2}(/\\d{2,4})?\\b"), "")
-        title = title.replace(Regex("(?i)\\b(?:[àa]s?|para\\s+as?)\\s*\\d{1,2}(?::\\d{2}|h\\d{0,2}|\\s*horas?)\\b(?:\\s+da\\s+(?:manha|tarde|noite))?"), "")
+        title = title.replace(Regex("(?i)\\b(?:[àa]s?|às?|para\\s+as?|para\\s+às?)\\s*\\d{1,2}(?::\\d{2}|h\\d{0,2}|\\s*horas?)?(?:\\s+da\\s+(?:manha|manhã|tarde|noite))?"), "")
         title = title.replace(Regex("(?i)\\b\\d{1,2}h\\d{0,2}\\b"), "")
         title = title.replace(Regex("(?i)(e\\s+)?(me\\s+)?(lembre|lembrar|lembra|avise|avisar|notifique|notificar)[^,.;]*"), "")
         title = title.replace(Regex("(?i)\\b(com\\s+)?(aviso|lembrete)\\s+\\d{1,3}\\s*(minutos?|mins?)\\s+antes\\b"), "")
