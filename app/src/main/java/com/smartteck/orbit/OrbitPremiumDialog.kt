@@ -64,7 +64,7 @@ fun OrbitPremiumDialog(
                 PremiumFeature("Agendamentos por linguagem natural e recorrência")
                 PremiumFeature("Detecção de conflitos de data e horário")
                 PremiumFeature("Painel de progresso: hoje, semana, mês e ano")
-                PremiumFeature("Todos os benefícios do ORBIT PLUS, incluindo voz")
+                PremiumFeature("Todos os recursos avançados do ORBIT MAX, incluindo lembretes por voz")
                 Spacer(Modifier.height(2.dp))
                 Text(
                     price?.let { "$it / mês, conforme o plano exibido pelo Google Play" }
