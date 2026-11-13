@@ -245,13 +245,35 @@ internal fun EnhancedAssistantDialog(
                                     onClick = {
                                         val value = prompt.trim()
                                         if (value.isNotBlank()) {
+                                            val parsedDate = OrbitCommandParser.parseExplicitDate(value)
+                                            val parsedTime = OrbitCommandParser.parseExplicitTime(value)
                                             title = OrbitCommandParser.suggestTitle(value)
-                                            draft = null
-                                            selectedDate = ""
+                                            selectedDate = parsedDate.orEmpty()
+                                            selectedTime = parsedTime ?: "09:00"
                                             recurrence = "once"
-                                            stage = 1
-                                            answer = "Compromisso recebido. Agora escolha o horário no relógio."
+                                            draft = null
                                             prompt = ""
+                                            when {
+                                                parsedTime == null -> {
+                                                    stage = 1
+                                                    answer = "por favor defina o horário do lembrete"
+                                                }
+                                                parsedDate == null -> {
+                                                    stage = 2
+                                                    answer = "Horário identificado: $selectedTime. Qual é a data do compromisso?"
+                                                }
+                                                else -> {
+                                                    val parsed = OrbitCommandParser.parseSchedule(value)
+                                                    draft = parsed ?: OrbitScheduleDraft(title, parsedDate, selectedTime, 0)
+                                                    title = draft?.title ?: title
+                                                    stage = 2
+                                                    answer = if (scheduleIsFuture(parsedDate, selectedTime)) {
+                                                        "Identifiquei a data e o horário. Confira os dados e confirme o agendamento."
+                                                    } else {
+                                                        "A data e o horário informados já passaram. Edite para escolher um horário futuro."
+                                                    }
+                                                }
+                                            }
                                         }
                                     }, enabled = prompt.isNotBlank(),
                                     modifier = Modifier.fillMaxWidth(),
@@ -272,8 +294,18 @@ internal fun EnhancedAssistantDialog(
                                             Button(
                                                 onClick = {
                                                     selectedTime = "%02d:%02d".format(Locale.US, timeState.hour, timeState.minute)
-                                                    stage = 2
-                                                    answer = "Horário definido para $selectedTime. Agora escolha a data no calendário."
+                                                    if (selectedDate.isNotBlank()) {
+                                                        draft = OrbitScheduleDraft(title, selectedDate, selectedTime, 0)
+                                                        stage = 2
+                                                        answer = if (scheduleIsFuture(selectedDate, selectedTime)) {
+                                                            "Data e horário definidos. Confira os dados e confirme o agendamento."
+                                                        } else {
+                                                            "Esse horário já passou. Edite a data ou o horário para continuar."
+                                                        }
+                                                    } else {
+                                                        stage = 2
+                                                        answer = "Horário definido para $selectedTime. Agora escolha a data no calendário."
+                                                    }
                                                 },
                                                 modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = SBlue),
                                                 shape = RoundedCornerShape(12.dp)
