@@ -97,7 +97,8 @@ object OrbitCommandParser {
         val normalized = normalize(command)
         val match = timeWithUnit.find(normalized) ?: hourAfterAs.find(normalized) ?: return null
         var hour = match.groups[1]?.value?.toIntOrNull() ?: return null
-        val minute = (match.groups[2]?.value ?: match.groups[3]?.value ?: "0").toIntOrNull() ?: return null
+        val minute = (match.groupValues.getOrNull(2)?.takeIf { it.isNotBlank() }
+            ?: match.groupValues.getOrNull(3)?.takeIf { it.isNotBlank() } ?: "0").toIntOrNull() ?: return null
         val suffix = normalized.substring(match.range.last + 1).trimStart()
         when {
             suffix.startsWith("da noite") || suffix.startsWith("da tarde") -> if (hour in 1..11) hour += 12
@@ -117,7 +118,8 @@ object OrbitCommandParser {
         val date = parseDate(normalized) ?: return null
         val timeMatch = timeWithUnit.find(normalized) ?: hourAfterAs.find(normalized) ?: return null
         var hour = (timeMatch.groups[1]?.value ?: "").toIntOrNull() ?: return null
-        val minute = (timeMatch.groups[2]?.value ?: timeMatch.groups[3]?.value ?: "0").toIntOrNull() ?: return null
+        val minute = (timeMatch.groupValues.getOrNull(2)?.takeIf { it.isNotBlank() }
+            ?: timeMatch.groupValues.getOrNull(3)?.takeIf { it.isNotBlank() } ?: "0").toIntOrNull() ?: return null
         val timeSuffix = normalized.substring(timeMatch.range.last + 1).trimStart()
         when {
             timeSuffix.startsWith("da noite") || timeSuffix.startsWith("da tarde") -> if (hour in 1..11) hour += 12
