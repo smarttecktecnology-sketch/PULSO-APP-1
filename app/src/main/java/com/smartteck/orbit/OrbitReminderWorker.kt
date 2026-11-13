@@ -26,9 +26,7 @@ internal fun orbitVoiceReminderAllowed(
     voiceSettingEnabled: Boolean,
     reminderVoiceEnabled: Boolean
 ): Boolean {
-    val eligiblePlan = isTestMode ||
-        savedPlan == OrbitPlanTier.PLUS.name ||
-        savedPlan == OrbitPlanTier.MAX.name
+    val eligiblePlan = isTestMode || savedPlan == OrbitPlanTier.MAX.name
     return reminderVoiceEnabled && voiceSettingEnabled && eligiblePlan
 }
 
