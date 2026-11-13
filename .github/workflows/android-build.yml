@@ -42,21 +42,49 @@ jobs:
         id: emulator-smoke-test
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 35
+          api-level: 30
           arch: x86_64
           profile: pixel_2
           disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -memory 2048
           script: |
-            adb install -r app/build/outputs/apk/trial/debug/app-trial-debug.apk
-            adb shell am force-stop com.smartteck.orbit.trial
-            adb shell monkey -p com.smartteck.orbit.trial -c android.intent.category.LAUNCHER 1
-            sleep 8
-            adb shell pidof com.smartteck.orbit.trial
-            adb install -r app/build/outputs/apk/official/debug/app-official-debug.apk
-            adb shell am force-stop com.smartteck.orbit
-            adb shell monkey -p com.smartteck.orbit -c android.intent.category.LAUNCHER 1
-            sleep 8
-            adb shell pidof com.smartteck.orbit
+            set -euo pipefail
+            adb wait-for-device
+            for attempt in $(seq 1 90); do
+              if [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = "1" ]; then
+                break
+              fi
+              sleep 2
+            done
+            test "$(adb shell getprop sys.boot_completed | tr -d '\r')" = "1"
+            sleep 10
+
+            launch_and_verify() {
+              local apk="$1"
+              local package_name="$2"
+              echo "Installing $package_name"
+              adb install -r "$apk"
+              adb shell am force-stop "$package_name" || true
+              local launch_output
+              launch_output="$(adb shell am start -W -n "$package_name/.MainActivity" 2>&1)"
+              echo "$launch_output"
+              echo "$launch_output" | grep -q "Status: ok"
+
+              for attempt in $(seq 1 20); do
+                if adb shell pidof "$package_name" >/dev/null 2>&1; then
+                  echo "$package_name launched successfully."
+                  return 0
+                fi
+                sleep 2
+              done
+
+              echo "Application process did not remain alive: $package_name"
+              adb logcat -d -s AndroidRuntime:E
+              return 1
+            }
+
+            launch_and_verify app/build/outputs/apk/trial/debug/app-trial-debug.apk com.smartteck.orbit.trial
+            launch_and_verify app/build/outputs/apk/official/debug/app-official-debug.apk com.smartteck.orbit
       - name: Report emulator smoke test result
         if: always()
         run: |
