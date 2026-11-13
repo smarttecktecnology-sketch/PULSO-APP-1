@@ -176,6 +176,7 @@ class OrbitCommandParserTest {
     fun extractsTimeFromPartialRequestsIncludingAfternoonSuffix() {
         assertEquals("15:30", OrbitCommandParser.parseExplicitTime("consulta às 3:30 da tarde"))
         assertEquals("08:00", OrbitCommandParser.parseExplicitTime("prova às 8h"))
+        assertEquals("15:00", OrbitCommandParser.parseExplicitTime("consulta às 3 da tarde"))
         assertEquals(null, OrbitCommandParser.parseExplicitTime("consulta amanhã"))
     }
 
