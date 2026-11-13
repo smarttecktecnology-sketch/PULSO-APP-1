@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -206,9 +207,9 @@ fun OrbitSettingsScreen(
                 Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
                     Text("DADOS E PRIVACIDADE", color = PlansCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                     Text("Seu histórico e seus backups ficam armazenados localmente no aparelho.", color = PlansMuted, fontSize = 11.sp)
-                    Button(onClick = onHistory, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = PlansPanel2)) { Icon(Icons.Default.History, null); Spacer(Modifier.width(8.dp)); Text("Histórico de notificações") }
-                    Button(onClick = onBackup, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = PlansBlue)) { Icon(Icons.Default.Backup, null); Spacer(Modifier.width(8.dp)); Text("Exportar backup") }
-                    Button(onClick = onRestore, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = PlansPanel2)) { Icon(Icons.Default.Restore, null); Spacer(Modifier.width(8.dp)); Text("Restaurar backup") }
+                    Button(onClick = onHistory, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = PlansPanel2)) { Icon(Icons.Default.NotificationsActive, null); Spacer(Modifier.width(8.dp)); Text("Histórico de notificações") }
+                    Button(onClick = onBackup, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = PlansBlue)) { Icon(Icons.Default.CheckCircle, null); Spacer(Modifier.width(8.dp)); Text("Exportar backup") }
+                    Button(onClick = onRestore, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = PlansPanel2)) { Icon(Icons.Default.UploadFile, null); Spacer(Modifier.width(8.dp)); Text("Restaurar backup") }
                     Text("O backup inclui tarefas e histórico de notificações. Os arquivos anexados permanecem nos locais originais do dispositivo.", color = PlansMuted, fontSize = 10.sp)
                 }
             }
