@@ -40,7 +40,6 @@ jobs:
           retention-days: 14
       - name: Run Android emulator smoke test
         id: emulator-smoke-test
-        continue-on-error: true
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 35
@@ -51,8 +50,13 @@ jobs:
             adb install -r app/build/outputs/apk/trial/debug/app-trial-debug.apk
             adb shell am force-stop com.smartteck.orbit.trial
             adb shell monkey -p com.smartteck.orbit.trial -c android.intent.category.LAUNCHER 1
-            sleep 10
+            sleep 8
             adb shell pidof com.smartteck.orbit.trial
+            adb install -r app/build/outputs/apk/official/debug/app-official-debug.apk
+            adb shell am force-stop com.smartteck.orbit
+            adb shell monkey -p com.smartteck.orbit -c android.intent.category.LAUNCHER 1
+            sleep 8
+            adb shell pidof com.smartteck.orbit
       - name: Report emulator smoke test result
         if: always()
         run: |
