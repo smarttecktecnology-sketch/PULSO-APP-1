@@ -1018,6 +1018,84 @@ private fun cancelOrbitReminder(context: Context, taskId: Long) {
     WorkManager.getInstance(context).cancelUniqueWork("orbit_task_reminder_${taskId}")
 }
 
+private data class OrbitNotificationEntry(val id: Long, val title: String, val kind: String, val timestamp: Long)
+
+private fun loadOrbitNotificationHistory(context: Context): List<OrbitNotificationEntry> = try {
+    val array = JSONArray(context.getSharedPreferences("orbit_data", Context.MODE_PRIVATE).getString("notification_history", "[]"))
+    (0 until array.length()).map { index ->
+        val item = array.getJSONObject(index)
+        OrbitNotificationEntry(item.optLong("id"), item.optString("title"), item.optString("kind"), item.optLong("timestamp"))
+    }.sortedByDescending { it.timestamp }
+} catch (_: Exception) { emptyList() }
+
+private fun buildOrbitBackup(context: Context): String {
+    val prefs = context.getSharedPreferences("orbit_data", Context.MODE_PRIVATE)
+    return JSONObject()
+        .put("app", "SMART_ORBIT")
+        .put("schemaVersion", 1)
+        .put("createdAt", System.currentTimeMillis())
+        .put("tasks", JSONArray(prefs.getString("tasks", "[]") ?: "[]"))
+        .put("notificationHistory", JSONArray(prefs.getString("notification_history", "[]") ?: "[]"))
+        .toString(2)
+}
+
+private fun parseOrbitBackup(raw: String): List<OrbitTask> {
+    val root = JSONObject(raw)
+    require(root.optString("app") == "SMART_ORBIT" && root.optInt("schemaVersion") == 1)
+    val array = root.getJSONArray("tasks")
+    require(array.length() <= 5000)
+    val restored = ArrayList<OrbitTask>()
+    val ids = HashSet<Long>()
+    for (index in 0 until array.length()) {
+        val item = array.getJSONObject(index)
+        val id = item.getLong("id")
+        val title = item.getString("title").trim()
+        val date = item.getString("date")
+        val time = item.optString("reminderTime", "09:00")
+        require(id > 0 && ids.add(id) && title.isNotBlank() && title.length <= 180)
+        require(date.matches(Regex("\\d{4}-\\d{2}-\\d{2}")) && time.matches(Regex("\\d{2}:\\d{2}")))
+        restored.add(OrbitTask(id, title, date, item.optBoolean("done"), time, item.optInt("reminderLeadMinutes", 0).coerceIn(0, 1440)))
+    }
+    return restored
+}
+
+@Composable
+private fun NotificationHistoryScreen(entries: List<OrbitNotificationEntry>, onClear: () -> Unit, onBack: () -> Unit) {
+    var cleared by remember { mutableStateOf(false) }
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        item {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, "Voltar", tint = OrbitCyan) }
+                Column {
+                    Text("Histórico de notificações", color = OrbitText, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                    Text("Últimos 100 lembretes registrados neste aparelho.", color = OrbitMuted, fontSize = 11.sp)
+                }
+            }
+        }
+        if (entries.isNotEmpty() && !cleared) item {
+            TextButton(onClick = { onClear(); cleared = true }) {
+                Icon(Icons.Default.DeleteOutline, null); Text("Limpar histórico")
+            }
+        }
+        if (entries.isEmpty() || cleared) item {
+            EmptyState("Nenhuma notificação registrada", "Os lembretes enviados aparecerão aqui.", Icons.Default.NotificationsNone)
+        }
+        if (!cleared) items(entries, key = { it.id }) { entry ->
+            Card(colors = CardDefaults.cardColors(containerColor = OrbitPanel), shape = RoundedCornerShape(15.dp)) {
+                Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.NotificationsActive, null, tint = OrbitCyan, modifier = Modifier.size(24.dp))
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(entry.title, color = OrbitText, fontWeight = FontWeight.SemiBold)
+                        Text(entry.kind, color = OrbitCyan, fontSize = 10.sp)
+                        Text(SimpleDateFormat("dd/MM/yyyy • HH:mm", Locale("pt", "BR")).format(Date(entry.timestamp)), color = OrbitMuted, fontSize = 11.sp)
+                    }
+                }
+            }
+        }
+    }
+}
+
 private fun loadTasks(context: Context): List<OrbitTask> = try {
     val array = JSONArray(context.getSharedPreferences("orbit_data", Context.MODE_PRIVATE).getString("tasks", "[]"))
     (0 until array.length()).map { i ->
