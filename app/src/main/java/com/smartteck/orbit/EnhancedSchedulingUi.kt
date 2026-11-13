@@ -108,7 +108,7 @@ internal fun EnhancedAddTaskDialog(
                         Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Default.Lock, null, tint = SCyan)
                             Spacer(Modifier.width(9.dp))
-                            Text("Agendamentos recorrentes são um benefício do ORBIT PLUS e MAX.", color = SMuted, fontSize = 11.sp)
+                            Text("Agendamentos recorrentes fazem parte da assinatura ORBIT MAX.", color = SMuted, fontSize = 11.sp)
                         }
                     }
                 }
