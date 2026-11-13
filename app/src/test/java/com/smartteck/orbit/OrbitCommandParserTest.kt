@@ -181,6 +181,11 @@ class OrbitCommandParserTest {
     }
 
     @Test
+    fun suggestedTitleRemovesPortugueseDateAndHourPhrases() {
+        assertEquals("Consulta", OrbitCommandParser.suggestTitle("consulta amanhã às 3 da tarde"))
+    }
+
+    @Test
     fun extractsDateFromPartialRequestsWithoutRequiringTime() {
         assertTrue(OrbitCommandParser.parseExplicitDate("dentista amanhã") != null)
         assertEquals(null, OrbitCommandParser.parseExplicitDate("dentista sem data"))
