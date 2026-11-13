@@ -73,3 +73,20 @@ internal fun nextOrbitTaskId(existingIds: Collection<Long>, nowMillis: Long = Sy
     val afterExisting = existingIds.maxOrNull()?.let { if (it == Long.MAX_VALUE) it else it + 1L } ?: Long.MIN_VALUE
     return maxOf(nowMillis, afterExisting)
 }
+
+/**
+ * Returns the dates that already contain an unfinished task at the requested time.
+ * An optional task ID is excluded so an item can be edited without conflicting with itself.
+ */
+internal fun orbitConflictingScheduleDates(
+    tasks: List<OrbitTask>,
+    dates: List<String>,
+    time: String,
+    excludingTaskId: Long? = null
+): Set<String> {
+    val requestedDates = dates.toSet()
+    return tasks.asSequence()
+        .filter { !it.done && it.id != excludingTaskId && it.dueDate in requestedDates && it.reminderTime == time }
+        .map { it.dueDate }
+        .toSet()
+}
