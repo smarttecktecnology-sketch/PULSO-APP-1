@@ -48,7 +48,19 @@ jobs:
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -memory 2048
           # The emulator action executes script lines separately; keep this smoke test on one shell line.
-          script: adb wait-for-device && adb install -r app/build/outputs/apk/trial/debug/app-trial-debug.apk && adb shell am start -W -n com.smartteck.orbit.trial/.MainActivity 2>&1 | grep -q "Status: ok" && adb shell pidof com.smartteck.orbit.trial && adb install -r app/build/outputs/apk/official/debug/app-official-debug.apk && adb shell am start -W -n com.smartteck.orbit/.MainActivity 2>&1 | grep -q "Status: ok" && adb shell pidof com.smartteck.orbit
+          script: |
+            set -euo pipefail
+            adb wait-for-device
+            adb install -r app/build/outputs/apk/trial/debug/app-trial-debug.apk
+            trial_output="$(adb shell am start -W -n com.smartteck.orbit.trial/.MainActivity 2>&1)"
+            echo "$trial_output"
+            echo "$trial_output" | grep -Fq "Status: ok"
+            adb shell pidof com.smartteck.orbit.trial
+            adb install -r app/build/outputs/apk/official/debug/app-official-debug.apk
+            official_output="$(adb shell am start -W -n com.smartteck.orbit/.MainActivity 2>&1)"
+            echo "$official_output"
+            echo "$official_output" | grep -Fq "Status: ok"
+            adb shell pidof com.smartteck.orbit
       - name: Report emulator smoke test result
         if: always()
         run: |
