@@ -128,9 +128,9 @@ class OrbitTaskTimeTest {
     @Test
     fun voiceRemindersRequireEligiblePlanAndBothSwitchesInOfficialEdition() {
         assertFalse(orbitVoiceReminderAllowed(false, OrbitPlanTier.FREE.name, true, true))
-        assertFalse(orbitVoiceReminderAllowed(false, OrbitPlanTier.PLUS.name, false, true))
+        assertFalse(orbitVoiceReminderAllowed(false, OrbitPlanTier.MAX.name, false, true))
         assertFalse(orbitVoiceReminderAllowed(false, OrbitPlanTier.MAX.name, true, false))
-        assertTrue(orbitVoiceReminderAllowed(false, OrbitPlanTier.PLUS.name, true, true))
+        assertTrue(orbitVoiceReminderAllowed(false, OrbitPlanTier.MAX.name, true, true))
         assertTrue(orbitVoiceReminderAllowed(false, OrbitPlanTier.MAX.name, true, true))
     }
 
