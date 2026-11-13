@@ -209,7 +209,7 @@ fun OrbitSettingsScreen(
                     Text("Seu histórico e seus backups ficam armazenados localmente no aparelho.", color = PlansMuted, fontSize = 11.sp)
                     Button(onClick = onHistory, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = PlansPanel2)) { Icon(Icons.Default.NotificationsActive, null); Spacer(Modifier.width(8.dp)); Text("Histórico de notificações") }
                     Button(onClick = onBackup, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = PlansBlue)) { Icon(Icons.Default.CheckCircle, null); Spacer(Modifier.width(8.dp)); Text("Exportar backup") }
-                    Button(onClick = onRestore, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = PlansPanel2)) { Icon(Icons.Default.UploadFile, null); Spacer(Modifier.width(8.dp)); Text("Restaurar backup") }
+                    Button(onClick = onRestore, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = PlansPanel2)) { Icon(Icons.Default.CheckCircle, null); Spacer(Modifier.width(8.dp)); Text("Restaurar backup") }
                     Text("O backup inclui tarefas e histórico de notificações. Os arquivos anexados permanecem nos locais originais do dispositivo.", color = PlansMuted, fontSize = 10.sp)
                 }
             }
