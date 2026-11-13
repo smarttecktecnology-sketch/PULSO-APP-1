@@ -78,6 +78,35 @@ class OrbitTaskTimeTest {
     }
 
     @Test
+    fun conflictDetectionFindsOnlyPendingTasksAtTheRequestedTime() {
+        val tasks = listOf(
+            OrbitTask(1L, "Reunião", "2026-11-20", false, "10:00"),
+            OrbitTask(2L, "Concluída", "2026-11-20", true, "10:00"),
+            OrbitTask(3L, "Outro horário", "2026-11-20", false, "11:00"),
+            OrbitTask(4L, "Outro dia", "2026-11-21", false, "10:00")
+        )
+        assertEquals(
+            setOf("2026-11-20"),
+            orbitConflictingScheduleDates(tasks, listOf("2026-11-20", "2026-11-21"), "10:00")
+        )
+    }
+
+    @Test
+    fun conflictDetectionCanExcludeTheTaskBeingEdited() {
+        val tasks = listOf(
+            OrbitTask(1L, "Reunião", "2026-11-20", false, "10:00"),
+            OrbitTask(2L, "Outra", "2026-11-20", false, "10:00")
+        )
+        assertEquals(
+            setOf("2026-11-20"),
+            orbitConflictingScheduleDates(tasks, listOf("2026-11-20"), "10:00", excludingTaskId = 1L)
+        )
+        assertTrue(
+            orbitConflictingScheduleDates(tasks.take(1), listOf("2026-11-20"), "10:00", excludingTaskId = 1L).isEmpty()
+        )
+    }
+
+    @Test
     fun nonRecurringScheduleCreatesOnlyOneDate() {
         assertEquals(
             listOf("2026-11-12"),
