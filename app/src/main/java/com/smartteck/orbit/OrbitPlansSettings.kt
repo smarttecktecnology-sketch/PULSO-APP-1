@@ -73,7 +73,7 @@ fun OrbitPlansScreen(
         item {
             PlanCard(
                 name = "ORBIT FREE", price = "R$ 0,00", description = "Para começar a organizar sua rotina.",
-                features = listOf("Criar tarefas e lembretes manualmente", "Definir datas e horários", "Consultar agenda e compromissos", "Acompanhar tarefas pendentes e concluídas", "Guardar arquivos e documentos no app", "Receber notificações no horário programado"),
+                features = listOf("Criar tarefas e lembretes manualmente", "Definir datas e horários", "Calendário mensal com seleção de compromissos por dia", "Painel diário com agendamentos de hoje (concluídos/total)", "Acompanhar tarefas pendentes e concluídas", "Guardar arquivos e documentos no app", "Receber notificações no horário programado"),
                 current = activeTier == OrbitPlanTier.FREE, buttonLabel = if (activeTier == OrbitPlanTier.FREE) "PLANO ATUAL" else "SELECIONAR",
                 enabled = false, accent = PlansCyan, onClick = {}
             )
@@ -81,7 +81,7 @@ fun OrbitPlansScreen(
         item {
             PlanCard(
                 name = "ORBIT PLUS", price = plusPrice ?: "R$ 9,90 / mês", description = "Mais controle da rotina, recorrência e lembretes por voz.",
-                features = listOf("Todos os recursos do FREE", "Lembretes falados pelo aparelho, com controle para ativar ou desativar", "Criar compromissos que se repetem diariamente, semanalmente ou mensalmente", "Gerar até 12 ocorrências recorrentes por agendamento", "Evitar horários ocupados ao criar recorrências", "Mais praticidade para organizar rotinas frequentes"),
+                features = listOf("Todos os recursos do FREE", "Lembretes falados pelo aparelho, com controle para ativar ou desativar", "Criar compromissos que se repetem diariamente, semanalmente ou mensalmente", "Gerar até 12 ocorrências recorrentes por agendamento", "Evitar horários ocupados ao criar recorrências", "Resumo da rotina com tarefas pendentes e concluídas"),
                 current = activeTier == OrbitPlanTier.PLUS, buttonLabel = if (activeTier == OrbitPlanTier.PLUS) "PLANO ATUAL" else "ASSINAR",
                 enabled = activeTier != OrbitPlanTier.PLUS, accent = PlansCyan, onClick = { onSubscribe(OrbitPlanTier.PLUS) }
             )
@@ -89,7 +89,7 @@ fun OrbitPlansScreen(
         item {
             PlanCard(
                 name = "ORBIT MAX", price = maxPrice ?: "R$ 49,90 / mês", description = "O assistente inteligente e o controle avançado da sua rotina.",
-                features = listOf("Todos os recursos do PLUS", "Assistente ORBIT por conversa com IA", "Criar agendamentos usando linguagem natural", "Editar e cancelar agendamentos pelo chat", "Detectar conflitos de data e horário antes de confirmar", "Agendamentos recorrentes pelo assistente", "Painel exclusivo de progresso: hoje, semana, mês e ano"),
+                features = listOf("Todos os recursos do PLUS", "Assistente ORBIT MAX para agendamento por conversa", "Interpretar compromissos escritos em linguagem natural", "Identificar informações ausentes e solicitar data ou horário", "Detectar conflitos de data e horário antes de confirmar", "Criar agendamentos recorrentes pelo assistente", "Painel inteligente com atrasos, tarefas de hoje e próximo compromisso", "Relatórios de progresso: hoje, semana, mês e ano"),
                 current = activeTier == OrbitPlanTier.MAX, buttonLabel = if (activeTier == OrbitPlanTier.MAX) "PLANO ATUAL" else "ASSINAR",
                 enabled = activeTier != OrbitPlanTier.MAX, accent = PlansGold, onClick = { onSubscribe(OrbitPlanTier.MAX) }
             )
@@ -167,7 +167,7 @@ fun OrbitSettingsScreen(
                         when (activeTier) {
                             OrbitPlanTier.FREE -> "Você está usando os recursos essenciais: tarefas, agenda, arquivos e notificações."
                             OrbitPlanTier.PLUS -> "Seu plano inclui lembretes por voz e agendamentos recorrentes."
-                            OrbitPlanTier.MAX -> "Seu plano inclui todos os recursos, assistente de IA e painel de progresso."
+                            OrbitPlanTier.MAX -> "Seu plano inclui o assistente de agendamento, alertas de prioridade e relatórios de progresso por período."
                         },
                         color = PlansMuted,
                         fontSize = 12.sp
