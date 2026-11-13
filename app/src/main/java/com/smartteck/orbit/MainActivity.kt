@@ -88,7 +88,7 @@ private fun OrbitApp() {
     var premiumStatus by remember { mutableStateOf("Preparando planos do Google Play…") }
     var voiceRemindersEnabled by remember { mutableStateOf(context.getSharedPreferences("orbit_settings", Context.MODE_PRIVATE).getBoolean("voice_reminders", false)) }
     val effectiveTier = if (BuildConfig.ORBIT_TEST_MODE) OrbitPlanTier.MAX else activeTier
-    val voiceAvailable = effectiveTier == OrbitPlanTier.PLUS || effectiveTier == OrbitPlanTier.MAX
+    val voiceAvailable = effectiveTier == OrbitPlanTier.MAX
     val billingManager = remember(context) {
         if (BuildConfig.ORBIT_TEST_MODE) null else OrbitBillingManager(context) { tier, status, plus, max, plusIsReady, maxIsReady ->
             activeTier = tier
@@ -319,7 +319,7 @@ private fun OrbitApp() {
             EnhancedAddTaskDialog(
                 onDismiss = { showTaskDialog = false; editingTask = null },
                 initialTask = taskBeingEdited,
-                recurrenceAvailable = effectiveTier == OrbitPlanTier.PLUS || effectiveTier == OrbitPlanTier.MAX
+                recurrenceAvailable = effectiveTier == OrbitPlanTier.MAX
             ) { title, date, time, recurrence ->
                 if (taskBeingEdited == null) addTask(title, date, time, recurrence = recurrence)
                 else updateTask(taskBeingEdited.copy(title = title.trim(), dueDate = date.trim(), reminderTime = time))
