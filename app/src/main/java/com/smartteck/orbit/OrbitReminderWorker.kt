@@ -43,6 +43,11 @@ class OrbitReminderWorker(context: Context, params: WorkerParameters) : Worker(c
             ContextCompat.checkSelfPermission(applicationContext, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
 
         if (notificationsAllowed) {
+            saveOrbitNotificationHistory(applicationContext, title, when {
+                inputData.getBoolean(KEY_LEAD_ALREADY_PASSED, false) -> "Aviso antecipado"
+                inputData.getInt(KEY_LEAD_MINUTES, 0) > 0 -> "Lembrete antecipado"
+                else -> "Lembrete"
+            })
             val openApp = PendingIntent.getActivity(
                 applicationContext, taskId.hashCode(),
                 Intent(applicationContext, MainActivity::class.java).apply {
@@ -149,6 +154,16 @@ class OrbitReminderWorker(context: Context, params: WorkerParameters) : Worker(c
         const val KEY_VOICE_ENABLED = "voice_enabled"
         const val KEY_LEAD_ALREADY_PASSED = "lead_already_passed"
     }
+}
+
+internal fun saveOrbitNotificationHistory(context: Context, title: String, kind: String, timestamp: Long = System.currentTimeMillis()) {
+    val prefs = context.getSharedPreferences("orbit_data", Context.MODE_PRIVATE)
+    val history = try { JSONArray(prefs.getString("notification_history", "[]") ?: "[]") } catch (_: Exception) { JSONArray() }
+    history.put(org.json.JSONObject().put("id", timestamp).put("title", title.take(180)).put("kind", kind.take(40)).put("timestamp", timestamp))
+    val trimmed = JSONArray()
+    val start = (history.length() - 100).coerceAtLeast(0)
+    for (index in start until history.length()) trimmed.put(history.getJSONObject(index))
+    prefs.edit().putString("notification_history", trimmed.toString()).apply()
 }
 
 fun createOrbitNotificationChannel(context: Context) {
