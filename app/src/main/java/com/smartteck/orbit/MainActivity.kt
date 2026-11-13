@@ -66,7 +66,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private enum class OrbitPage(val title: String) { HOME("Início"), TASKS("Tarefas"), AGENDA("Agenda"), FILES("Arquivos"), PLANS("Assinaturas"), SETTINGS("Configurações") }
+private enum class OrbitPage(val title: String) { HOME("Início"), TASKS("Tarefas"), AGENDA("Agenda"), FILES("Arquivos"), NOTIFICATIONS("Notificações"), PLANS("Assinaturas"), SETTINGS("Configurações") }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -106,6 +106,30 @@ private fun OrbitApp() {
         onDispose { billingManager?.close() }
     }
     val notificationPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
+    val backupExporter = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+        if (uri != null) {
+            try {
+                val payload = buildOrbitBackup(context)
+                context.contentResolver.openOutputStream(uri)?.use { it.write(payload.toByteArray(Charsets.UTF_8)) }
+                Toast.makeText(context, "Backup exportado com sucesso.", Toast.LENGTH_LONG).show()
+            } catch (_: Exception) {
+                Toast.makeText(context, "Não foi possível exportar o backup.", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+    val backupImporter = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            try {
+                val raw = context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() } ?: throw IllegalStateException("Arquivo vazio")
+                val restored = parseOrbitBackup(raw)
+                tasks = restored
+                saveTasks(context, restored)
+                Toast.makeText(context, "Backup restaurado: ${restored.size} tarefa(s).", Toast.LENGTH_LONG).show()
+            } catch (_: Exception) {
+                Toast.makeText(context, "Backup inválido ou incompatível. Seus dados atuais foram preservados.", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
     LaunchedEffect(Unit) {
         createOrbitNotificationChannel(context)
         if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
@@ -224,7 +248,7 @@ private fun OrbitApp() {
                 )
             },
             bottomBar = {
-                if (page !in listOf(OrbitPage.PLANS, OrbitPage.SETTINGS)) {
+                if (page !in listOf(OrbitPage.PLANS, OrbitPage.SETTINGS, OrbitPage.NOTIFICATIONS)) {
                     NavigationBar(containerColor = OrbitPanel) {
                         val nav = listOf(OrbitPage.HOME to Icons.Default.Home, OrbitPage.TASKS to Icons.Default.CheckCircle, OrbitPage.AGENDA to Icons.Default.CalendarMonth, OrbitPage.FILES to Icons.Default.FolderOpen)
                         nav.forEach { (item, icon) ->
