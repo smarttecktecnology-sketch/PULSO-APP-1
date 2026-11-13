@@ -38,6 +38,7 @@ private val SGreen = Color(0xFF45C99A)
 internal fun EnhancedAddTaskDialog(
     onDismiss: () -> Unit,
     initialTask: OrbitTask? = null,
+    recurrenceAvailable: Boolean = true,
     onSave: (String, String, String, String) -> Unit
 ) {
     var title by remember(initialTask?.id) { mutableStateOf(initialTask?.title.orEmpty()) }
@@ -84,7 +85,7 @@ internal fun EnhancedAddTaskDialog(
                     trailingIcon = { IconButton(onClick = { showTime = true }) { Icon(Icons.Default.Schedule, "Selecionar horário", tint = SCyan) } },
                     supportingText = { Text("Formato 24 horas • use o relógio para escolher") }, shape = RoundedCornerShape(14.dp)
                 )
-                if (initialTask == null) {
+                if (initialTask == null && recurrenceAvailable) {
                     Text("03  •  REPETIÇÃO", color = SCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                     Box {
                         OutlinedButton(onClick = { recurrenceExpanded = true }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp)) {
@@ -101,6 +102,15 @@ internal fun EnhancedAddTaskDialog(
                         }
                     }
                     if (recurrence != "once") Text("Serão criadas até 12 ocorrências, com lembretes individuais.", color = SMuted, fontSize = 11.sp)
+                }
+                if (initialTask == null && !recurrenceAvailable) {
+                    Surface(color = Color(0xFF24364A), shape = RoundedCornerShape(13.dp)) {
+                        Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Lock, null, tint = SCyan)
+                            Spacer(Modifier.width(9.dp))
+                            Text("Agendamentos recorrentes são um benefício do ORBIT PLUS e MAX.", color = SMuted, fontSize = 11.sp)
+                        }
+                    }
                 }
                 AnimatedVisibility(validate && (title.isBlank() || !validDate || !validTime || !futureSchedule), enter = fadeIn() + slideInVertically(), exit = fadeOut()) {
                     Surface(color = Color(0xFF542B38), shape = RoundedCornerShape(12.dp)) {
