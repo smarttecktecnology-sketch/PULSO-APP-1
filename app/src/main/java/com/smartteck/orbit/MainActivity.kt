@@ -1057,7 +1057,7 @@ private fun parseOrbitBackup(raw: String): OrbitBackupData {
         val date = item.getString("date")
         val time = item.optString("reminderTime", "09:00")
         require(id > 0 && ids.add(id) && title.isNotBlank() && title.length <= 180)
-        require(date.matches(Regex("\\d{4}-\\d{2}-\\d{2}")) && time.matches(Regex("\\d{2}:\\d{2}")))
+        require(orbitLocalDateTimeMillis(date, time) != null) { "Data ou horário inválido no backup" }
         restored.add(OrbitTask(id, title, date, item.optBoolean("done"), time, item.optInt("reminderLeadMinutes", 0).coerceIn(0, 1440)))
     }
     val history = root.optJSONArray("notificationHistory") ?: JSONArray()
