@@ -444,14 +444,21 @@ private fun OrbitProgressMetric(label: String, progress: Pair<Int, Int>, modifie
     val completed = progress.first
     val total = progress.second
     val remaining = (total - completed).coerceAtLeast(0)
+    val progress = if (total == 0) 0f else (completed.toFloat() / total).coerceIn(0f, 1f)
     Column(
         modifier = modifier
             .background(OrbitPanel2, RoundedCornerShape(15.dp))
             .padding(12.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp)
+        verticalArrangement = Arrangement.spacedBy(7.dp)
     ) {
         Text(label, color = OrbitMuted, fontSize = 11.sp, fontWeight = FontWeight.Medium)
         Text("$completed/$total", color = OrbitText, fontSize = 23.sp, fontWeight = FontWeight.ExtraBold)
+        LinearProgressIndicator(
+            progress = progress,
+            modifier = Modifier.fillMaxWidth().height(6.dp),
+            color = OrbitCyan,
+            trackColor = OrbitBg
+        )
         Text("$remaining restantes", color = OrbitCyan, fontSize = 10.sp)
     }
 }
