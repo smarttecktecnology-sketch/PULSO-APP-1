@@ -339,56 +339,105 @@ private fun OrbitSplashScreen() {
 
 @Composable
 private fun HomeScreen(activeTier: OrbitPlanTier, tasks: List<OrbitTask>, documentCount: Int, onTasks: () -> Unit, onAgenda: () -> Unit, onAssistant: () -> Unit, onPlans: () -> Unit, onToggle: (OrbitTask) -> Unit) {
+    val todayKey = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
+    val todayTasks = tasks.filter { it.dueDate == todayKey }
+    val todayDone = todayTasks.count { it.done }
+    val todayPending = todayTasks.size - todayDone
     val pending = tasks.count { !it.done }
     val completed = tasks.count { it.done }
+    val overdue = tasks.count { !it.done && OrbitTaskTime.isOverdue(it) }
+    val nextTask = OrbitTaskTime.sortByDueDate(tasks.filter { !it.done && it.dueDate >= todayKey }).firstOrNull()
     val today = SimpleDateFormat("EEEE, d 'de' MMMM", Locale("pt", "BR")).format(Date())
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+    val completion = if (todayTasks.isEmpty()) 0f else todayDone.toFloat() / todayTasks.size
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         item {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Button(onClick = onPlans, colors = ButtonDefaults.buttonColors(containerColor = OrbitBlue), shape = RoundedCornerShape(12.dp)) {
                     Icon(Icons.Default.WorkspacePremium, null, modifier = Modifier.size(17.dp))
-                    Spacer(Modifier.width(7.dp))
-                    Text("Assinaturas")
+                    Spacer(Modifier.width(7.dp)); Text("Assinaturas")
                 }
             }
             Text(today.replaceFirstChar { it.uppercase() }, color = OrbitMuted, fontSize = 12.sp)
             Spacer(Modifier.height(5.dp))
             Text("Seu mundo, em ordem.", color = OrbitText, fontSize = 27.sp, fontWeight = FontWeight.Bold)
-            Text("Tudo o que importa, em um só lugar.", color = OrbitMuted, fontSize = 14.sp)
+            Text("Seu painel diário de organização.", color = OrbitMuted, fontSize = 14.sp)
         }
         item {
-            Card(shape = RoundedCornerShape(26.dp), colors = CardDefaults.cardColors(containerColor = OrbitPanel2)) {
-                Box(Modifier.fillMaxWidth()) {
-                    Box(Modifier.align(Alignment.TopEnd).size(145.dp).background(OrbitBlue.copy(alpha = .12f), CircleShape))
-                    Column(Modifier.padding(20.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Surface(color = OrbitBlue.copy(alpha = .22f), shape = RoundedCornerShape(50.dp)) {
-                                Text("PAINEL DE CONTROLE", color = OrbitCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 11.dp, vertical = 7.dp))
-                            }
-                            Spacer(Modifier.weight(1f)); Icon(Icons.Default.AutoAwesome, null, tint = OrbitCyan)
-                        }
-                        Spacer(Modifier.height(18.dp))
-                        Text("$pending", color = OrbitText, fontSize = 42.sp, fontWeight = FontWeight.ExtraBold)
-                        Text("tarefas pendentes", color = OrbitMuted, fontSize = 14.sp)
-                        Spacer(Modifier.height(17.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
-                            MiniMetric("$completed concluídas", OrbitGreen)
-                            MiniMetric("$documentCount arquivos", OrbitCyan)
-                        }
-                        Spacer(Modifier.height(18.dp))
-                        Button(onClick = onTasks, colors = ButtonDefaults.buttonColors(containerColor = OrbitBlue), shape = RoundedCornerShape(12.dp)) {
-                            Text("Organizar meu dia"); Spacer(Modifier.width(8.dp)); Icon(Icons.Default.ArrowForward, null, modifier = Modifier.size(16.dp))
-                        }
+            Card(shape = RoundedCornerShape(24.dp), colors = CardDefaults.cardColors(containerColor = OrbitPanel2)) {
+                Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("AGENDAMENTOS DE HOJE", color = OrbitCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        Spacer(Modifier.weight(1f))
+                        Text("${todayDone}/${todayTasks.size}", color = OrbitText, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold)
+                    }
+                    LinearProgressIndicator(progress = completion, modifier = Modifier.fillMaxWidth().height(7.dp), color = OrbitCyan, trackColor = OrbitBg)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        MiniMetric("$todayPending pendentes", OrbitCyan)
+                        MiniMetric("$todayDone concluídos", OrbitGreen)
+                    }
+                    Text(if (todayTasks.isEmpty()) "Você ainda não tem compromissos para hoje." else "Você concluiu $todayDone de ${todayTasks.size} agendamento(s) de hoje.", color = OrbitMuted, fontSize = 12.sp)
+                }
+            }
+        }
+        item {
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                DashboardStat("Pendentes", pending.toString(), Icons.Default.PendingActions, Modifier.weight(1f))
+                DashboardStat("Atrasados", overdue.toString(), Icons.Default.WarningAmber, Modifier.weight(1f))
+                DashboardStat("Concluídos", completed.toString(), Icons.Default.TaskAlt, Modifier.weight(1f))
+            }
+        }
+        if (activeTier == OrbitPlanTier.MAX) item {
+            Card(colors = CardDefaults.cardColors(containerColor = OrbitPanel), shape = RoundedCornerShape(20.dp)) {
+                Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.AutoAwesome, null, tint = OrbitCyan)
+                        Spacer(Modifier.width(8.dp))
+                        Text("ORBIT MAX • CENTRAL INTELIGENTE", color = OrbitCyan, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+                    Text(
+                        when {
+                            overdue > 0 -> "Você tem $overdue compromisso(s) atrasado(s). Priorize a revisão deles."
+                            todayPending > 0 -> "Você tem $todayPending compromisso(s) para concluir hoje. Mantenha o foco."
+                            todayTasks.isEmpty() -> "Sua agenda de hoje está livre. Aproveite para planejar os próximos dias."
+                            else -> "Ótimo ritmo: seus compromissos de hoje estão concluídos."
+                        },
+                        color = OrbitText, fontSize = 13.sp
+                    )
+                    Text("Use o Assistente MAX para organizar novos compromissos e conferir conflitos.", color = OrbitMuted, fontSize = 11.sp)
+                    Button(onClick = onAssistant, colors = ButtonDefaults.buttonColors(containerColor = OrbitBlue)) {
+                        Icon(Icons.Default.AutoAwesome, null, modifier = Modifier.size(16.dp)); Spacer(Modifier.width(7.dp)); Text("Abrir assistente MAX")
                     }
                 }
             }
         }
+        if (activeTier == OrbitPlanTier.PLUS) item {
+            Card(colors = CardDefaults.cardColors(containerColor = OrbitPanel), shape = RoundedCornerShape(18.dp)) {
+                Column(Modifier.padding(15.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                    Text("ORBIT PLUS • RESUMO DA ROTINA", color = OrbitCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    Text("$pending compromisso(s) pendente(s) e $completed concluído(s).", color = OrbitText, fontSize = 13.sp)
+                    Text("Aproveite os lembretes por voz e os agendamentos recorrentes.", color = OrbitMuted, fontSize = 11.sp)
+                }
+            }
+        }
         if (activeTier == OrbitPlanTier.MAX) item { OrbitProgressPanel(tasks) }
+        item {
+            Card(colors = CardDefaults.cardColors(containerColor = OrbitPanel), shape = RoundedCornerShape(18.dp)) {
+                Column(Modifier.fillMaxWidth().padding(15.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                    Text("PRÓXIMO COMPROMISSO", color = OrbitCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    if (nextTask == null) {
+                        Text("Nenhum compromisso futuro pendente.", color = OrbitText, fontSize = 13.sp)
+                    } else {
+                        Text(nextTask.title, color = OrbitText, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                        Text("${OrbitTaskTime.displayDate(nextTask.dueDate)} • ${nextTask.reminderTime}", color = OrbitMuted, fontSize = 12.sp)
+                    }
+                }
+            }
+        }
         item { SectionHeader("Acesso rápido", "Atalhos para sua rotina") }
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                ShortcutCard("Assistente", "Transforme informações em ações", Icons.Default.AutoAwesome, Modifier.weight(1f), onAssistant)
-                ShortcutCard("Agenda", "Veja seus compromissos", Icons.Default.CalendarMonth, Modifier.weight(1f), onAgenda)
+                ShortcutCard("Assistente", if (activeTier == OrbitPlanTier.MAX) "Planejamento com IA" else "Recurso do MAX", Icons.Default.AutoAwesome, Modifier.weight(1f), onAssistant)
+                ShortcutCard("Agenda", "Calendário mensal", Icons.Default.CalendarMonth, Modifier.weight(1f), onAgenda)
             }
         }
         item {
@@ -398,11 +447,21 @@ private fun HomeScreen(activeTier: OrbitPlanTier, tasks: List<OrbitTask>, docume
             }
         }
         if (tasks.none { !it.done }) item { EmptyState("Tudo tranquilo por aqui", "Adicione uma tarefa pelo botão + para começar.", Icons.Default.CheckCircle) }
-        else items(
-            OrbitTaskTime.sortByDueDate(tasks.filter { !it.done })
-                .take(4),
-            key = { it.id }
-        ) { TaskRow(it, onToggle, null) }
+        else items(OrbitTaskTime.sortByDueDate(tasks.filter { !it.done }).take(4), key = { it.id }) { TaskRow(it, onToggle, null) }
+        item {
+            Text("$documentCount arquivo(s) guardado(s)", color = OrbitMuted, fontSize = 11.sp)
+        }
+    }
+}
+
+@Composable
+private fun DashboardStat(label: String, value: String, icon: androidx.compose.ui.graphics.vector.ImageVector, modifier: Modifier = Modifier) {
+    Card(modifier = modifier, colors = CardDefaults.cardColors(containerColor = OrbitPanel), shape = RoundedCornerShape(16.dp)) {
+        Column(Modifier.fillMaxWidth().padding(11.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+            Icon(icon, null, tint = OrbitCyan, modifier = Modifier.size(18.dp))
+            Text(value, color = OrbitText, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold)
+            Text(label, color = OrbitMuted, fontSize = 10.sp, maxLines = 1)
+        }
     }
 }
 
@@ -520,20 +579,80 @@ private fun TasksScreen(tasks: List<OrbitTask>, onToggle: (OrbitTask) -> Unit, o
 
 @Composable
 private fun AgendaScreen(tasks: List<OrbitTask>) {
-    val dated = OrbitTaskTime.sortByDueDate(tasks.filter { it.dueDate.isNotBlank() })
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        item { Text("Sua agenda", color = OrbitText, fontSize = 27.sp, fontWeight = FontWeight.Bold); Text("Datas importantes ligadas às suas tarefas.", color = OrbitMuted, fontSize = 13.sp) }
+    var monthOffset by remember { mutableIntStateOf(0) }
+    var selectedDate by remember { mutableStateOf(SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())) }
+    val monthCalendar = Calendar.getInstance().apply {
+        set(Calendar.DAY_OF_MONTH, 1)
+        add(Calendar.MONTH, monthOffset)
+    }
+    val monthLabel = SimpleDateFormat("MMMM 'de' yyyy", Locale("pt", "BR")).format(monthCalendar.time)
+        .replaceFirstChar { it.uppercase() }
+    val firstWeekday = (monthCalendar.get(Calendar.DAY_OF_WEEK) - monthCalendar.firstDayOfWeek + 7) % 7
+    val daysInMonth = monthCalendar.getActualMaximum(Calendar.DAY_OF_MONTH)
+    val dayTasks = OrbitTaskTime.sortByDueDate(tasks.filter { it.dueDate == selectedDate })
+    val todayKey = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        item {
+            Text("Sua agenda", color = OrbitText, fontSize = 27.sp, fontWeight = FontWeight.Bold)
+            Text("Calendário mensal e compromissos por dia.", color = OrbitMuted, fontSize = 13.sp)
+        }
         item {
             Card(colors = CardDefaults.cardColors(containerColor = OrbitPanel2), shape = RoundedCornerShape(20.dp)) {
-                Row(Modifier.fillMaxWidth().padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.CalendarMonth, null, tint = OrbitCyan, modifier = Modifier.size(34.dp)); Spacer(Modifier.width(14.dp))
-                    Column { Text(SimpleDateFormat("d 'de' MMMM", Locale("pt", "BR")).format(Date()), color = OrbitText, fontWeight = FontWeight.Bold, fontSize = 18.sp); Text("Hoje", color = OrbitMuted, fontSize = 12.sp) }
+                Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(onClick = { monthOffset-- }) { Icon(Icons.Default.ChevronLeft, "Mês anterior", tint = OrbitCyan) }
+                        Text(monthLabel, color = OrbitText, fontSize = 17.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                        IconButton(onClick = { monthOffset++ }) { Icon(Icons.Default.ChevronRight, "Próximo mês", tint = OrbitCyan) }
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                        listOf("D", "S", "T", "Q", "Q", "S", "S").forEach { day ->
+                            Text(day, color = OrbitMuted, fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                        }
+                    }
+                    val totalCells = ((firstWeekday + daysInMonth + 6) / 7) * 7
+                    for (weekStart in 0 until totalCells step 7) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                            for (cell in weekStart until weekStart + 7) {
+                                val dayNumber = cell - firstWeekday + 1
+                                if (dayNumber in 1..daysInMonth) {
+                                    val dayCalendar = (monthCalendar.clone() as Calendar).apply { set(Calendar.DAY_OF_MONTH, dayNumber) }
+                                    val dateKey = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(dayCalendar.time)
+                                    val count = tasks.count { it.dueDate == dateKey }
+                                    val selected = selectedDate == dateKey
+                                    val isToday = todayKey == dateKey
+                                    Surface(
+                                        onClick = { selectedDate = dateKey },
+                                        modifier = Modifier.weight(1f).height(48.dp),
+                                        color = if (selected) OrbitBlue else if (isToday) OrbitBlue.copy(alpha = .22f) else Color.Transparent,
+                                        shape = RoundedCornerShape(10.dp),
+                                        border = if (isToday && !selected) androidx.compose.foundation.BorderStroke(1.dp, OrbitCyan) else null
+                                    ) {
+                                        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                                            Text(dayNumber.toString(), color = if (selected) Color.White else OrbitText, fontSize = 13.sp, fontWeight = if (selected || isToday) FontWeight.Bold else FontWeight.Normal)
+                                            if (count > 0) Text("• $count", color = if (selected) Color.White else OrbitCyan, fontSize = 9.sp)
+                                        }
+                                    }
+                                } else {
+                                    Spacer(Modifier.weight(1f).height(48.dp))
+                                }
+                            }
+                        }
+                    }
+                    Text("Toque em um dia para ver os compromissos. Os pontos indicam dias com agendamentos.", color = OrbitMuted, fontSize = 10.sp)
                 }
             }
         }
-        item { SectionHeader("Datas das tarefas", "${dated.size} com data definida") }
-        if (dated.isEmpty()) item { EmptyState("Agenda livre", "Ao criar uma tarefa, informe a data no formato AAAA-MM-DD para vê-la aqui.", Icons.Default.EventAvailable) }
-        items(dated, key = { it.id }) { TaskRow(it, {}, null, false) }
+        item {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(OrbitTaskTime.displayDate(selectedDate), color = OrbitText, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                    Text("Compromissos do dia selecionado", color = OrbitMuted, fontSize = 11.sp)
+                }
+                Text("${dayTasks.size} item(ns)", color = OrbitCyan, fontSize = 11.sp)
+            }
+        }
+        if (dayTasks.isEmpty()) item { EmptyState("Nenhum compromisso neste dia", "Escolha outra data ou adicione um novo agendamento.", Icons.Default.EventAvailable) }
+        items(dayTasks, key = { it.id }) { TaskRow(it, {}, null, false) }
     }
 }
 
