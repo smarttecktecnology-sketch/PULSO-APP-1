@@ -134,16 +134,23 @@ private fun OrbitApp() {
     }
 
     fun addTask(title: String, date: String, time: String, leadMinutes: Int = 0, recurrence: String = "once") {
-        val dates = orbitRecurrenceDates(date.trim(), recurrence)
+        val cleanTitle = title.trim()
+        val cleanDate = date.trim()
+        val cleanTime = time.trim()
+        val dates = orbitRecurrenceDates(cleanDate, recurrence)
+        if (cleanTitle.isBlank() || dates.isEmpty() || orbitLocalDateTimeMillis(cleanDate, cleanTime)?.let { it > System.currentTimeMillis() } != true) {
+            Toast.makeText(context, "Confira o nome, a data e o horário futuro do compromisso.", Toast.LENGTH_LONG).show()
+            return
+        }
+        val conflictingDates = orbitConflictingScheduleDates(tasks, dates, cleanTime)
         val firstAvailableId = nextOrbitTaskId(tasks.map { it.id })
         val newTasks = dates.mapIndexedNotNull { index, occurrenceDate ->
-            val conflict = tasks.any { !it.done && it.dueDate == occurrenceDate && it.reminderTime == time.trim() }
-            if (conflict) null else OrbitTask(
+            if (occurrenceDate in conflictingDates) null else OrbitTask(
                 firstAvailableId + index,
-                title.trim(),
+                cleanTitle,
                 occurrenceDate,
                 false,
-                time.trim(),
+                cleanTime,
                 leadMinutes.coerceIn(0, 1440)
             )
         }
@@ -161,6 +168,17 @@ private fun OrbitApp() {
         }
     }
     fun updateTask(updated: OrbitTask) {
+        if (updated.title.isBlank() || orbitLocalDateTimeMillis(updated.dueDate, updated.reminderTime)?.let { it > System.currentTimeMillis() } != true) {
+            Toast.makeText(context, "Confira o nome, a data e o horário futuro do compromisso.", Toast.LENGTH_LONG).show()
+            return
+        }
+        val conflicts = orbitConflictingScheduleDates(
+            tasks, listOf(updated.dueDate), updated.reminderTime, excludingTaskId = updated.id
+        )
+        if (conflicts.isNotEmpty()) {
+            Toast.makeText(context, "Já existe outro compromisso nesse horário. Escolha outro horário.", Toast.LENGTH_LONG).show()
+            return
+        }
         tasks = tasks.map { if (it.id == updated.id) updated else it }
         saveTasks(context, tasks)
         if (updated.done) cancelOrbitReminder(context, updated.id) else scheduleOrbitReminder(context, updated, voiceRemindersEnabled && voiceAvailable)
