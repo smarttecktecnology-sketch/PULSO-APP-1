@@ -447,15 +447,6 @@ private fun HomeScreen(activeTier: OrbitPlanTier, tasks: List<OrbitTask>, docume
                 }
             }
         }
-        if (activeTier == OrbitPlanTier.PLUS) item {
-            Card(colors = CardDefaults.cardColors(containerColor = OrbitPanel), shape = RoundedCornerShape(18.dp)) {
-                Column(Modifier.padding(15.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                    Text("ORBIT PLUS • RESUMO DA ROTINA", color = OrbitCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                    Text("$pending compromisso(s) pendente(s) e $completed concluído(s).", color = OrbitText, fontSize = 13.sp)
-                    Text("Aproveite os lembretes por voz e os agendamentos recorrentes.", color = OrbitMuted, fontSize = 11.sp)
-                }
-            }
-        }
         if (activeTier == OrbitPlanTier.MAX) item { OrbitProgressPanel(tasks) }
         item {
             Card(colors = CardDefaults.cardColors(containerColor = OrbitPanel), shape = RoundedCornerShape(18.dp)) {
