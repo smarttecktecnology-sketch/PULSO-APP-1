@@ -122,9 +122,11 @@ private fun OrbitApp() {
             try {
                 val raw = context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() } ?: throw IllegalStateException("Arquivo vazio")
                 val restored = parseOrbitBackup(raw)
-                tasks = restored
-                saveTasks(context, restored)
-                Toast.makeText(context, "Backup restaurado: ${restored.size} tarefa(s).", Toast.LENGTH_LONG).show()
+                tasks = restored.tasks
+                saveTasks(context, restored.tasks)
+                context.getSharedPreferences("orbit_data", Context.MODE_PRIVATE).edit()
+                    .putString("notification_history", restored.notificationHistory).apply()
+                Toast.makeText(context, "Backup restaurado: ${restored.tasks.size} tarefa(s).", Toast.LENGTH_LONG).show()
             } catch (_: Exception) {
                 Toast.makeText(context, "Backup inválido ou incompatível. Seus dados atuais foram preservados.", Toast.LENGTH_LONG).show()
             }
