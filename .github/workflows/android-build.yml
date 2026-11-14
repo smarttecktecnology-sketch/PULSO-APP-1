@@ -38,7 +38,7 @@ jobs:
           path: app/build/outputs/apk/official/debug/app-official-debug.apk
           if-no-files-found: error
           retention-days: 14
-      - name: Run Android emulator smoke test
+      - name: Run Android instrumentation and launch tests
         id: emulator-smoke-test
         uses: reactivecircus/android-emulator-runner@v2
         with:
@@ -47,25 +47,46 @@ jobs:
           profile: pixel_2
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -memory 2048
-          # Resolve the launcher activity from the manifest; the Activity class package differs from the trial applicationId.
           script: |
             set -euo pipefail
             adb wait-for-device
+
+            # Execute the existing ActivityScenario instrumentation test in both editions.
+            gradle --no-daemon :app:connectedTrialDebugAndroidTest :app:connectedOfficialDebugAndroidTest
+
+            launch_and_check() {
+              package="$1"
+              component="$package/com.smartteck.orbit.MainActivity"
+              adb shell am force-stop "$package" || true
+              if ! output="$(adb shell am start -W -n "$component" 2>&1)"; then
+                echo "Failed to start $component"
+                echo "$output"
+                adb logcat -d -t 500
+                return 1
+              fi
+              echo "$output"
+              if ! echo "$output" | grep -Fq "Status: ok"; then
+                echo "Launcher did not report Status: ok for $package"
+                adb logcat -d -t 500
+                return 1
+              fi
+              if ! adb shell pidof "$package"; then
+                echo "Process did not remain alive for $package"
+                adb logcat -d -t 500
+                return 1
+              fi
+            }
+
             adb install -r app/build/outputs/apk/trial/debug/app-trial-debug.apk
-            trial_output="$(adb shell am start -W -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -p com.smartteck.orbit.trial 2>&1)"
-            echo "$trial_output"
-            echo "$trial_output" | grep -Fq "Status: ok"
-            adb shell pidof com.smartteck.orbit.trial
+            launch_and_check com.smartteck.orbit.trial
+
             adb install -r app/build/outputs/apk/official/debug/app-official-debug.apk
-            official_output="$(adb shell am start -W -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -p com.smartteck.orbit 2>&1)"
-            echo "$official_output"
-            echo "$official_output" | grep -Fq "Status: ok"
-            adb shell pidof com.smartteck.orbit
-      - name: Report emulator smoke test result
+            launch_and_check com.smartteck.orbit
+      - name: Report emulator test result
         if: always()
         run: |
           if [ "${{ steps.emulator-smoke-test.outcome }}" = "success" ]; then
-            echo "Emulator smoke test passed."
+            echo "Instrumentation and launch tests passed in both editions."
           else
-            echo "::warning::Emulator smoke test did not pass. The APK was already uploaded."
+            echo "::warning::Instrumentation or launch tests failed. APK artifacts were uploaded before emulator tests."
           fi
