@@ -48,9 +48,7 @@ private val PlansGold = Color(0xFFFFD166)
 @Composable
 fun OrbitPlansScreen(
     activeTier: OrbitPlanTier,
-    plusPrice: String?,
     maxPrice: String?,
-    plusReady: Boolean,
     maxReady: Boolean,
     status: String,
     onSubscribe: (OrbitPlanTier) -> Unit,
@@ -87,7 +85,7 @@ fun OrbitPlansScreen(
                     "Criação de recorrências pelo assistente",
                     "Painel inteligente com atrasos, tarefas de hoje e próximo compromisso",
                     "Relatórios de progresso por dia, semana, mês e ano",
-                    "Arquivos, histórico e ferramentas de backup"
+                    "Arquivos e histórico"
                 ),
                 current = isMax,
                 buttonLabel = if (isMax) "ASSINATURA ATIVA" else "ASSINAR ORBIT MAX",
@@ -147,8 +145,6 @@ fun OrbitSettingsScreen(
     voiceEnabled: Boolean,
     onVoiceChanged: (Boolean) -> Unit,
     onHistory: () -> Unit,
-    onBackup: () -> Unit,
-    onRestore: () -> Unit,
     onBack: () -> Unit
 ) {
     val voiceAvailable = activeTier == OrbitPlanTier.MAX
@@ -198,11 +194,8 @@ fun OrbitSettingsScreen(
             Card(colors = CardDefaults.cardColors(containerColor = PlansPanel), shape = RoundedCornerShape(18.dp)) {
                 Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
                     Text("DADOS E PRIVACIDADE", color = PlansCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                    Text("Seu histórico e seus backups ficam armazenados localmente no aparelho.", color = PlansMuted, fontSize = 11.sp)
+                    Text("Seu histórico de notificações fica armazenado localmente no aparelho.", color = PlansMuted, fontSize = 11.sp)
                     Button(onClick = onHistory, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = PlansPanel2)) { Icon(Icons.Default.NotificationsActive, null); Spacer(Modifier.width(8.dp)); Text("Histórico de notificações") }
-                    Button(onClick = onBackup, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = PlansBlue)) { Icon(Icons.Default.CheckCircle, null); Spacer(Modifier.width(8.dp)); Text("Exportar backup") }
-                    Button(onClick = onRestore, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = PlansPanel2)) { Icon(Icons.Default.CheckCircle, null); Spacer(Modifier.width(8.dp)); Text("Restaurar backup") }
-                    Text("O backup inclui tarefas e histórico de notificações. Os arquivos anexados permanecem nos locais originais do dispositivo.", color = PlansMuted, fontSize = 10.sp)
                 }
             }
         }
