@@ -106,32 +106,6 @@ private fun OrbitApp() {
         onDispose { billingManager?.close() }
     }
     val notificationPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
-    val backupExporter = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
-        if (uri != null) {
-            try {
-                val payload = buildOrbitBackup(context)
-                context.contentResolver.openOutputStream(uri)?.use { it.write(payload.toByteArray(Charsets.UTF_8)) }
-                Toast.makeText(context, "Backup exportado com sucesso.", Toast.LENGTH_LONG).show()
-            } catch (_: Exception) {
-                Toast.makeText(context, "Não foi possível exportar o backup.", Toast.LENGTH_LONG).show()
-            }
-        }
-    }
-    val backupImporter = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri != null) {
-            try {
-                val raw = context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() } ?: throw IllegalStateException("Arquivo vazio")
-                val restored = parseOrbitBackup(raw)
-                tasks = restored.tasks
-                saveTasks(context, restored.tasks)
-                context.getSharedPreferences("orbit_data", Context.MODE_PRIVATE).edit()
-                    .putString("notification_history", restored.notificationHistory).apply()
-                Toast.makeText(context, "Backup restaurado: ${restored.tasks.size} tarefa(s).", Toast.LENGTH_LONG).show()
-            } catch (_: Exception) {
-                Toast.makeText(context, "Backup inválido ou incompatível. Seus dados atuais foram preservados.", Toast.LENGTH_LONG).show()
-            }
-        }
-    }
     LaunchedEffect(Unit) {
         createOrbitNotificationChannel(context)
         if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
@@ -307,8 +281,6 @@ private fun OrbitApp() {
                             }
                         },
                         onHistory = { page = OrbitPage.NOTIFICATIONS },
-                        onBackup = { backupExporter.launch("smart-orbit-backup.json") },
-                        onRestore = { backupImporter.launch(arrayOf("application/json", "text/*")) },
                         onBack = { page = OrbitPage.HOME }
                     )
                 }
@@ -1020,41 +992,6 @@ private fun loadOrbitNotificationHistory(context: Context): List<OrbitNotificati
         OrbitNotificationEntry(item.optLong("id"), item.optString("title"), item.optString("kind"), item.optLong("timestamp"))
     }.sortedByDescending { it.timestamp }
 } catch (_: Exception) { emptyList() }
-
-private fun buildOrbitBackup(context: Context): String {
-    val prefs = context.getSharedPreferences("orbit_data", Context.MODE_PRIVATE)
-    return JSONObject()
-        .put("app", "SMART_ORBIT")
-        .put("schemaVersion", 1)
-        .put("createdAt", System.currentTimeMillis())
-        .put("tasks", JSONArray(prefs.getString("tasks", "[]") ?: "[]"))
-        .put("notificationHistory", JSONArray(prefs.getString("notification_history", "[]") ?: "[]"))
-        .toString(2)
-}
-
-private data class OrbitBackupData(val tasks: List<OrbitTask>, val notificationHistory: String)
-
-private fun parseOrbitBackup(raw: String): OrbitBackupData {
-    val root = JSONObject(raw)
-    require(root.optString("app") == "SMART_ORBIT" && root.optInt("schemaVersion") == 1)
-    val array = root.getJSONArray("tasks")
-    require(array.length() <= 5000)
-    val restored = ArrayList<OrbitTask>()
-    val ids = HashSet<Long>()
-    for (index in 0 until array.length()) {
-        val item = array.getJSONObject(index)
-        val id = item.getLong("id")
-        val title = item.getString("title").trim()
-        val date = item.getString("date")
-        val time = item.optString("reminderTime", "09:00")
-        require(id > 0 && ids.add(id) && title.isNotBlank() && title.length <= 180)
-        require(orbitLocalDateTimeMillis(date, time) != null) { "Data ou horário inválido no backup" }
-        restored.add(OrbitTask(id, title, date, item.optBoolean("done"), time, item.optInt("reminderLeadMinutes", 0).coerceIn(0, 1440)))
-    }
-    val history = root.optJSONArray("notificationHistory") ?: JSONArray()
-    require(history.length() <= 100)
-    return OrbitBackupData(restored, history.toString())
-}
 
 @Composable
 private fun NotificationHistoryScreen(entries: List<OrbitNotificationEntry>, onClear: () -> Unit, onBack: () -> Unit) {
