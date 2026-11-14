@@ -12,28 +12,38 @@ import com.android.billingclient.api.QueryProductDetailsParams
 import com.android.billingclient.api.QueryPurchasesParams
 
 /**
- * Google Play subscription client for the highest AI plan. No private backend/server is used.
- * Product ID must match a subscription created in Play Console.
+ * Google Play billing client for the single paid subscription: ORBIT MAX.
+ * Product ID must match the subscription configured in Play Console.
+ * Production release should add server-side purchase verification.
  */
 class OrbitBillingManager(
     context: Context,
-    private val onState: (active: Boolean, status: String, price: String?, productReady: Boolean) -> Unit
+    private val onState: (
+        activeTier: OrbitPlanTier,
+        status: String,
+        plusPrice: String?,
+        maxPrice: String?,
+        plusReady: Boolean,
+        maxReady: Boolean
+    ) -> Unit
 ) {
     companion object {
-        const val PREMIUM_PRODUCT_ID = "orbit_ai_max_monthly"
+        const val MAX_PRODUCT_ID = "orbit_max_monthly"
     }
 
     private val appContext = context.applicationContext
-    private var productDetails: ProductDetails? = null
-    private var offerToken: String? = null
+    private val products = mutableMapOf<String, ProductDetails>()
+    private val offers = mutableMapOf<String, String>()
     private var connected = false
+    private var activeTier = OrbitPlanTier.FREE
 
     private val billingClient = BillingClient.newBuilder(appContext)
         .setListener { result, purchases ->
             if (result.responseCode == BillingClient.BillingResponseCode.OK && purchases != null) {
                 purchases.forEach { processPurchase(it) }
+                refreshPurchases()
             } else if (result.responseCode != BillingClient.BillingResponseCode.USER_CANCELED) {
-                onState(false, "Não foi possível concluir a compra: ${result.debugMessage}", currentPrice(), productDetails != null)
+                emit("Não foi possível concluir a compra: ${result.debugMessage}")
             }
         }
         .enablePendingPurchases(
@@ -52,34 +62,36 @@ class OrbitBillingManager(
             override fun onSetupFinished(responseCode: Int, debugMessage: String) {
                 connected = responseCode == BillingClient.BillingResponseCode.OK
                 if (connected) loadProductsAndPurchases()
-                else onState(false, "Google Play indisponível: $debugMessage", null, false)
+                else emit("Google Play indisponível: $debugMessage")
             }
             override fun onServiceDisconnected() {
                 connected = false
-                onState(false, "Conexão com Google Play interrompida.", currentPrice(), productDetails != null)
+                emit("Conexão com Google Play interrompida.")
             }
         })
     }
 
     private fun loadProductsAndPurchases() {
         val product = QueryProductDetailsParams.Product.newBuilder()
-            .setProductId(PREMIUM_PRODUCT_ID)
+            .setProductId(MAX_PRODUCT_ID)
             .setProductType(BillingClient.ProductType.SUBS)
             .build()
+        products.clear()
+        offers.clear()
         val params = QueryProductDetailsParams.newBuilder().setProductList(listOf(product)).build()
         billingClient.queryProductDetailsAsync(params) { result, detailsResult ->
             if (result.responseCode == BillingClient.BillingResponseCode.OK) {
-                productDetails = detailsResult.productDetailsList.firstOrNull()
-                val offer = productDetails?.subscriptionOfferDetails?.firstOrNull()
-                offerToken = offer?.offerToken
-                val price = offer?.pricingPhases?.pricingPhaseList?.lastOrNull()?.formattedPrice
-                onState(false, if (productDetails != null && offerToken != null) {
-                    "Plano Premium encontrado no Google Play."
+                detailsResult.productDetailsList.forEach { details ->
+                    products[details.productId] = details
+                    details.subscriptionOfferDetails?.firstOrNull()?.offerToken?.let { offers[details.productId] = it }
+                }
+                emit(if (isReady(MAX_PRODUCT_ID)) {
+                    "ORBIT MAX encontrado no Google Play."
                 } else {
-                    "O plano ainda não foi publicado ou configurado no Google Play Console."
-                }, price, productDetails != null && offerToken != null)
+                    "Configure o produto $MAX_PRODUCT_ID no Google Play Console."
+                })
             } else {
-                onState(false, "Não foi possível consultar o plano: ${result.debugMessage}", null, false)
+                emit("Não foi possível consultar o ORBIT MAX: ${result.debugMessage}")
             }
         }
         refreshPurchases()
@@ -95,22 +107,24 @@ class OrbitBillingManager(
             .build()
         billingClient.queryPurchasesAsync(params) { result, purchases ->
             if (result.responseCode == BillingClient.BillingResponseCode.OK) {
-                val active = purchases.any {
-                    it.products.contains(PREMIUM_PRODUCT_ID) &&
-                        it.purchaseState == Purchase.PurchaseState.PURCHASED
-                }
-                purchases.filter { it.purchaseState == Purchase.PurchaseState.PURCHASED }
+                activeTier = if (purchases.any {
+                    it.purchaseState == Purchase.PurchaseState.PURCHASED && it.products.contains(MAX_PRODUCT_ID)
+                }) OrbitPlanTier.MAX else OrbitPlanTier.FREE
+                purchases.filter { it.purchaseState == Purchase.PurchaseState.PURCHASED && !it.isAcknowledged }
                     .forEach { processPurchase(it) }
-                if (!active) onState(false, "Você está no plano gratuito.", currentPrice(), productDetails != null && offerToken != null)
+                emit(if (activeTier == OrbitPlanTier.FREE) "Você está usando o acesso sem assinatura." else "Assinatura ORBIT MAX ativa nesta conta Google Play.")
+            } else {
+                emit("Não foi possível atualizar a assinatura: ${result.debugMessage}")
             }
         }
     }
 
-    fun launchPurchase(activity: Activity) {
-        val details = productDetails
-        val token = offerToken
+    fun launchPurchase(activity: Activity, tier: OrbitPlanTier) {
+        if (tier != OrbitPlanTier.MAX) return
+        val details = products[MAX_PRODUCT_ID]
+        val token = offers[MAX_PRODUCT_ID]
         if (!billingClient.isReady || details == null || token == null) {
-            onState(false, "Assinatura indisponível. Confira a configuração do produto no Google Play.", currentPrice(), false)
+            emit("ORBIT MAX ainda não está disponível. Confira se o produto mensal foi publicado no Google Play Console.")
             connect()
             return
         }
@@ -123,35 +137,47 @@ class OrbitBillingManager(
             .build()
         val result = billingClient.launchBillingFlow(activity, params)
         if (result.responseCode != BillingClient.BillingResponseCode.OK) {
-            onState(false, "Não foi possível abrir a compra: ${result.debugMessage}", currentPrice(), true)
+            emit("Não foi possível abrir a compra: ${result.debugMessage}")
         }
     }
 
     private fun processPurchase(purchase: Purchase) {
-        if (!purchase.products.contains(PREMIUM_PRODUCT_ID)) return
+        if (!purchase.products.contains(MAX_PRODUCT_ID)) return
         if (purchase.purchaseState != Purchase.PurchaseState.PURCHASED) {
-            onState(false, "Aguardando confirmação do pagamento no Google Play.", currentPrice(), productDetails != null && offerToken != null)
+            emit("Aguardando confirmação do pagamento no Google Play.")
             return
         }
+        activeTier = OrbitPlanTier.MAX
         if (purchase.isAcknowledged) {
-            onState(true, "SMART ORBIT Premium ativo nesta conta Google Play.", currentPrice(), productDetails != null && offerToken != null)
-        } else {
-            val params = AcknowledgePurchaseParams.newBuilder()
-                .setPurchaseToken(purchase.purchaseToken)
-                .build()
-            billingClient.acknowledgePurchase(params) { result ->
-                if (result.responseCode == BillingClient.BillingResponseCode.OK) {
-                    onState(true, "SMART ORBIT Premium ativo nesta conta Google Play.", currentPrice(), productDetails != null && offerToken != null)
-                } else {
-                    onState(false, "Compra recebida; aguardando confirmação do Google Play.", currentPrice(), productDetails != null && offerToken != null)
-                }
+            emit("Assinatura ORBIT MAX confirmada pelo Google Play.")
+            return
+        }
+        val params = AcknowledgePurchaseParams.newBuilder()
+            .setPurchaseToken(purchase.purchaseToken)
+            .build()
+        billingClient.acknowledgePurchase(params) { result ->
+            if (result.responseCode == BillingClient.BillingResponseCode.OK) {
+                emit("Assinatura ORBIT MAX confirmada pelo Google Play.")
+                refreshPurchases()
+            } else {
+                emit("Compra recebida; aguardando confirmação do Google Play.")
             }
         }
     }
 
-    private fun currentPrice(): String? =
-        productDetails?.subscriptionOfferDetails?.firstOrNull()
+    private fun isReady(productId: String): Boolean = products.containsKey(productId) && offers.containsKey(productId)
+
+    private fun formattedPrice(productId: String): String? =
+        products[productId]?.subscriptionOfferDetails?.firstOrNull()
             ?.pricingPhases?.pricingPhaseList?.lastOrNull()?.formattedPrice
+
+    private fun emit(status: String) {
+        onState(
+            activeTier, status,
+            null, formattedPrice(MAX_PRODUCT_ID),
+            false, isReady(MAX_PRODUCT_ID)
+        )
+    }
 
     fun close() {
         if (billingClient.isReady) billingClient.endConnection()
@@ -159,7 +185,6 @@ class OrbitBillingManager(
     }
 }
 
-/** Small adapter keeps BillingClient callbacks explicit and easy to test. */
 private abstract class BillingClientStateListenerCompat : com.android.billingclient.api.BillingClientStateListener {
     abstract fun onSetupFinished(responseCode: Int, debugMessage: String)
     abstract fun onServiceDisconnected()

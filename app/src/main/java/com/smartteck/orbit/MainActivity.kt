@@ -66,7 +66,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private enum class OrbitPage(val title: String) { HOME("Início"), TASKS("Tarefas"), AGENDA("Agenda"), FILES("Arquivos") }
+private enum class OrbitPage(val title: String) { HOME("Início"), TASKS("Tarefas"), AGENDA("Agenda"), FILES("Arquivos"), NOTIFICATIONS("Notificações"), PLANS("Assinaturas"), SETTINGS("Configurações") }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -80,23 +80,30 @@ private fun OrbitApp() {
     var showTaskDialog by remember { mutableStateOf(false) }
     var editingTask by remember { mutableStateOf<OrbitTask?>(null) }
     var showAssistant by remember { mutableStateOf(false) }
-    var showPremium by remember { mutableStateOf(false) }
-    var premiumActive by remember { mutableStateOf(false) }
-    var premiumPrice by remember { mutableStateOf<String?>(null) }
-    var premiumStatus by remember { mutableStateOf("Preparando assinatura do Google Play…") }
-    var premiumProductReady by remember { mutableStateOf(false) }
-    var voiceRemindersEnabled by remember { mutableStateOf(context.getSharedPreferences("orbit_settings", Context.MODE_PRIVATE).getBoolean("voice_reminders", true)) }
+    var activeTier by remember { mutableStateOf(OrbitPlanTier.FREE) }
+    var plusPrice by remember { mutableStateOf<String?>(null) }
+    var maxPrice by remember { mutableStateOf<String?>(null) }
+    var plusReady by remember { mutableStateOf(false) }
+    var maxReady by remember { mutableStateOf(false) }
+    var premiumStatus by remember { mutableStateOf("Preparando planos do Google Play…") }
+    var voiceRemindersEnabled by remember { mutableStateOf(context.getSharedPreferences("orbit_settings", Context.MODE_PRIVATE).getBoolean("voice_reminders", false)) }
+    val effectiveTier = if (BuildConfig.ORBIT_TEST_MODE) OrbitPlanTier.MAX else activeTier
+    val voiceAvailable = effectiveTier == OrbitPlanTier.MAX
     val billingManager = remember(context) {
-        OrbitBillingManager(context) { active, status, price, ready ->
-            premiumActive = active
+        if (BuildConfig.ORBIT_TEST_MODE) null else OrbitBillingManager(context) { tier, status, plus, max, plusIsReady, maxIsReady ->
+            activeTier = tier
+            context.getSharedPreferences("orbit_settings", Context.MODE_PRIVATE)
+                .edit().putString("active_plan", tier.name).apply()
             premiumStatus = status
-            premiumPrice = price
-            premiumProductReady = ready
+            plusPrice = plus
+            maxPrice = max
+            plusReady = plusIsReady
+            maxReady = maxIsReady
         }
     }
     DisposableEffect(billingManager) {
-        billingManager.connect()
-        onDispose { billingManager.close() }
+        billingManager?.connect()
+        onDispose { billingManager?.close() }
     }
     val notificationPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
     LaunchedEffect(Unit) {
@@ -108,10 +115,10 @@ private fun OrbitApp() {
 
     // Recria os lembretes das tarefas pendentes ao abrir o app.
     // O WorkManager mantém os trabalhos já agendados entre reinicializações.
-    LaunchedEffect(tasks, voiceRemindersEnabled) {
+    LaunchedEffect(tasks, voiceRemindersEnabled, voiceAvailable) {
         tasks.forEach { task ->
             if (task.done) cancelOrbitReminder(context, task.id)
-            else scheduleOrbitReminder(context, task, voiceRemindersEnabled)
+            else scheduleOrbitReminder(context, task, voiceRemindersEnabled && voiceAvailable)
         }
     }
 
@@ -126,16 +133,55 @@ private fun OrbitApp() {
         }
     }
 
-    fun addTask(title: String, date: String, time: String, leadMinutes: Int = 0) {
-        val task = OrbitTask(System.currentTimeMillis(), title.trim(), date.trim(), false, time.trim(), leadMinutes.coerceIn(0, 1440))
-        tasks = tasks + task
+    fun addTask(title: String, date: String, time: String, leadMinutes: Int = 0, recurrence: String = "once") {
+        val cleanTitle = title.trim()
+        val cleanDate = date.trim()
+        val cleanTime = time.trim()
+        val dates = orbitRecurrenceDates(cleanDate, recurrence)
+        if (cleanTitle.isBlank() || dates.isEmpty() || orbitLocalDateTimeMillis(cleanDate, cleanTime)?.let { it > System.currentTimeMillis() } != true) {
+            Toast.makeText(context, "Confira o nome, a data e o horário futuro do compromisso.", Toast.LENGTH_LONG).show()
+            return
+        }
+        val conflictingDates = orbitConflictingScheduleDates(tasks, dates, cleanTime)
+        val firstAvailableId = nextOrbitTaskId(tasks.map { it.id })
+        val newTasks = dates.mapIndexedNotNull { index, occurrenceDate ->
+            if (occurrenceDate in conflictingDates) null else OrbitTask(
+                firstAvailableId + index,
+                cleanTitle,
+                occurrenceDate,
+                false,
+                cleanTime,
+                leadMinutes.coerceIn(0, 1440)
+            )
+        }
+        if (newTasks.isEmpty()) {
+            Toast.makeText(context, "Já existe um compromisso nesse horário.", Toast.LENGTH_LONG).show()
+            return
+        }
+        tasks = tasks + newTasks
         saveTasks(context, tasks)
-        scheduleOrbitReminder(context, task, voiceRemindersEnabled)
+        newTasks.forEach { scheduleOrbitReminder(context, it, voiceRemindersEnabled && voiceAvailable) }
+        if (newTasks.size < dates.size) {
+            Toast.makeText(context, "${newTasks.size} ocorrência(s) criada(s); horários conflitantes foram ignorados.", Toast.LENGTH_LONG).show()
+        } else if (recurrence != "once") {
+            Toast.makeText(context, "${newTasks.size} ocorrências recorrentes adicionadas à agenda.", Toast.LENGTH_SHORT).show()
+        }
     }
     fun updateTask(updated: OrbitTask) {
+        if (updated.title.isBlank() || (!updated.done && orbitLocalDateTimeMillis(updated.dueDate, updated.reminderTime)?.let { it > System.currentTimeMillis() } != true)) {
+            Toast.makeText(context, "Confira o nome, a data e o horário futuro do compromisso.", Toast.LENGTH_LONG).show()
+            return
+        }
+        val conflicts = if (updated.done) emptySet() else orbitConflictingScheduleDates(
+            tasks, listOf(updated.dueDate), updated.reminderTime, excludingTaskId = updated.id
+        )
+        if (conflicts.isNotEmpty()) {
+            Toast.makeText(context, "Já existe outro compromisso nesse horário. Escolha outro horário.", Toast.LENGTH_LONG).show()
+            return
+        }
         tasks = tasks.map { if (it.id == updated.id) updated else it }
         saveTasks(context, tasks)
-        if (updated.done) cancelOrbitReminder(context, updated.id) else scheduleOrbitReminder(context, updated, voiceRemindersEnabled)
+        if (updated.done) cancelOrbitReminder(context, updated.id) else scheduleOrbitReminder(context, updated, voiceRemindersEnabled && voiceAvailable)
     }
     fun removeTask(task: OrbitTask) {
         tasks = tasks.filterNot { it.id == task.id }
@@ -144,10 +190,10 @@ private fun OrbitApp() {
     }
 
     val openAssistant = {
-        if (premiumActive) showAssistant = true
+        if (effectiveTier == OrbitPlanTier.MAX) showAssistant = true
         else {
-            showPremium = true
-            Toast.makeText(context, "O assistente de IA é exclusivo do plano mais caro: ORBIT MAX.", Toast.LENGTH_LONG).show()
+            page = OrbitPage.PLANS
+            Toast.makeText(context, "O assistente de IA é exclusivo do ORBIT MAX.", Toast.LENGTH_LONG).show()
         }
     }
 
@@ -170,26 +216,24 @@ private fun OrbitApp() {
                         }
                     },
                     actions = {
-                        IconButton(onClick = { showPremium = true }) { Icon(Icons.Default.WorkspacePremium, "SMART ORBIT Premium", tint = Color(0xFFFFD166)) }
-                        IconButton(onClick = openAssistant) { Icon(Icons.Default.AutoAwesome, "Assistente ORBIT — ORBIT MAX", tint = if (premiumActive) OrbitCyan else OrbitMuted) }
-                        IconButton(onClick = {
-                            voiceRemindersEnabled = !voiceRemindersEnabled
-                            context.getSharedPreferences("orbit_settings", Context.MODE_PRIVATE).edit().putBoolean("voice_reminders", voiceRemindersEnabled).apply()
-                            Toast.makeText(context, if (voiceRemindersEnabled) "Lembretes falados ativados" else "Lembretes falados desativados", Toast.LENGTH_SHORT).show()
-                        }) { Icon(if (voiceRemindersEnabled) Icons.Default.VolumeUp else Icons.Default.VolumeOff, if (voiceRemindersEnabled) "Desativar avisos falados" else "Ativar avisos falados", tint = if (voiceRemindersEnabled) OrbitCyan else OrbitMuted) }
+                        IconButton(onClick = { page = OrbitPage.SETTINGS }) {
+                            Icon(Icons.Default.Settings, "Configurações", tint = OrbitCyan)
+                        }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = OrbitBg)
                 )
             },
             bottomBar = {
-                NavigationBar(containerColor = OrbitPanel) {
-                    val nav = listOf(OrbitPage.HOME to Icons.Default.Home, OrbitPage.TASKS to Icons.Default.CheckCircle, OrbitPage.AGENDA to Icons.Default.CalendarMonth, OrbitPage.FILES to Icons.Default.FolderOpen)
-                    nav.forEach { (item, icon) ->
-                        NavigationBarItem(
-                            selected = page == item, onClick = { page = item },
-                            icon = { Icon(icon, item.title) }, label = { Text(item.title, fontSize = 10.sp) },
-                            colors = NavigationBarItemDefaults.colors(selectedIconColor = Color.White, selectedTextColor = OrbitCyan, indicatorColor = OrbitBlue.copy(alpha = .35f), unselectedIconColor = OrbitMuted, unselectedTextColor = OrbitMuted)
-                        )
+                if (page !in listOf(OrbitPage.PLANS, OrbitPage.SETTINGS, OrbitPage.NOTIFICATIONS)) {
+                    NavigationBar(containerColor = OrbitPanel) {
+                        val nav = listOf(OrbitPage.HOME to Icons.Default.Home, OrbitPage.TASKS to Icons.Default.CheckCircle, OrbitPage.AGENDA to Icons.Default.CalendarMonth, OrbitPage.FILES to Icons.Default.FolderOpen)
+                        nav.forEach { (item, icon) ->
+                            NavigationBarItem(
+                                selected = page == item, onClick = { page = item },
+                                icon = { Icon(icon, item.title) }, label = { Text(item.title, fontSize = 10.sp) },
+                                colors = NavigationBarItemDefaults.colors(selectedIconColor = Color.White, selectedTextColor = OrbitCyan, indicatorColor = OrbitBlue.copy(alpha = .35f), unselectedIconColor = OrbitMuted, unselectedTextColor = OrbitMuted)
+                            )
+                        }
                     }
                 }
             },
@@ -197,18 +241,48 @@ private fun OrbitApp() {
                 when (page) {
                     OrbitPage.HOME, OrbitPage.TASKS -> FloatingActionButton(onClick = { showTaskDialog = true }, containerColor = OrbitBlue, contentColor = Color.White) { Icon(Icons.Default.Add, "Nova tarefa") }
                     OrbitPage.FILES -> FloatingActionButton(onClick = { documentPicker.launch(arrayOf("*/*")) }, containerColor = OrbitBlue, contentColor = Color.White) { Icon(Icons.Default.UploadFile, "Adicionar arquivo") }
+                    OrbitPage.PLANS, OrbitPage.SETTINGS -> Unit
                     else -> Unit
                 }
             }
         ) { padding ->
             Box(Modifier.fillMaxSize().padding(padding)) {
                 when (page) {
-                    OrbitPage.HOME -> HomeScreen(tasks, documents.size, { page = OrbitPage.TASKS }, { page = OrbitPage.AGENDA }, openAssistant, { updateTask(it.copy(done = !it.done)) })
+                    OrbitPage.HOME -> HomeScreen(effectiveTier, tasks, documents.size, { page = OrbitPage.TASKS }, { page = OrbitPage.AGENDA }, openAssistant, { if (BuildConfig.ORBIT_TEST_MODE) Toast.makeText(context, "Todos os recursos estão liberados na versão de teste.", Toast.LENGTH_SHORT).show() else page = OrbitPage.PLANS }, { updateTask(it.copy(done = !it.done)) })
                     OrbitPage.TASKS -> TasksScreen(tasks, { updateTask(it.copy(done = !it.done)) }, { removeTask(it) }, { editingTask = it })
                     OrbitPage.AGENDA -> AgendaScreen(tasks)
                     OrbitPage.FILES -> FilesScreen(documents, { documentPicker.launch(arrayOf("*/*")) }, {
                         documents = documents.filterNot { doc -> doc.uri == it.uri }; saveDocuments(context, documents)
                     })
+                    OrbitPage.PLANS -> OrbitPlansScreen(
+                        effectiveTier, maxPrice, maxReady, premiumStatus,
+                        onSubscribe = { tier ->
+                            val activity = context as? Activity
+                            if (activity != null) billingManager?.launchPurchase(activity, tier)
+                            else Toast.makeText(context, "Não foi possível abrir o Google Play.", Toast.LENGTH_SHORT).show()
+                        },
+                        onBack = { page = OrbitPage.HOME }
+                    )
+                    OrbitPage.NOTIFICATIONS -> NotificationHistoryScreen(
+                        entries = loadOrbitNotificationHistory(context),
+                        onClear = {
+                            context.getSharedPreferences("orbit_data", Context.MODE_PRIVATE).edit().putString("notification_history", "[]").apply()
+                            page = OrbitPage.NOTIFICATIONS
+                        },
+                        onBack = { page = OrbitPage.SETTINGS }
+                    )
+                    OrbitPage.SETTINGS -> OrbitSettingsScreen(
+                        effectiveTier, voiceRemindersEnabled,
+                        onVoiceChanged = { enabled ->
+                            if (voiceAvailable) {
+                                voiceRemindersEnabled = enabled
+                                context.getSharedPreferences("orbit_settings", Context.MODE_PRIVATE).edit().putBoolean("voice_reminders", enabled).apply()
+                                Toast.makeText(context, if (enabled) "Lembretes por voz ativados" else "Lembretes por voz desativados", Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        onHistory = { page = OrbitPage.NOTIFICATIONS },
+                        onBack = { page = OrbitPage.HOME }
+                    )
                 }
             }
         }
@@ -216,30 +290,19 @@ private fun OrbitApp() {
             val taskBeingEdited = editingTask
             EnhancedAddTaskDialog(
                 onDismiss = { showTaskDialog = false; editingTask = null },
-                initialTask = taskBeingEdited
-            ) { title, date, time ->
-                if (taskBeingEdited == null) addTask(title, date, time)
+                initialTask = taskBeingEdited,
+                recurrenceAvailable = effectiveTier == OrbitPlanTier.MAX
+            ) { title, date, time, recurrence ->
+                if (taskBeingEdited == null) addTask(title, date, time, recurrence = recurrence)
                 else updateTask(taskBeingEdited.copy(title = title.trim(), dueDate = date.trim(), reminderTime = time))
                 showTaskDialog = false
                 editingTask = null
             }
         }
-        if (showAssistant && premiumActive) EnhancedAssistantDialog(
+        if (showAssistant && effectiveTier == OrbitPlanTier.MAX) EnhancedAssistantDialog(
+            tasks = tasks,
             onDismiss = { showAssistant = false },
-            onCreateTask = { title, date, time, lead -> addTask(title, date, time, lead) }
-        )
-        if (showPremium) OrbitPremiumDialog(
-            isPremium = premiumActive,
-            price = premiumPrice,
-            status = premiumStatus,
-            productReady = premiumProductReady,
-            onRefresh = { billingManager.refreshPurchases() },
-            onPurchase = {
-                val activity = context as? Activity
-                if (activity != null) billingManager.launchPurchase(activity)
-                else premiumStatus = "Não foi possível abrir a compra nesta tela."
-            },
-            onDismiss = { showPremium = false }
+            onCreateTask = { title, date, time, lead, recurrence -> addTask(title, date, time, lead, recurrence) }
         )
         }
     }
@@ -284,40 +347,88 @@ private fun OrbitSplashScreen() {
 }
 
 @Composable
-private fun HomeScreen(tasks: List<OrbitTask>, documentCount: Int, onTasks: () -> Unit, onAgenda: () -> Unit, onAssistant: () -> Unit, onToggle: (OrbitTask) -> Unit) {
+private fun HomeScreen(activeTier: OrbitPlanTier, tasks: List<OrbitTask>, documentCount: Int, onTasks: () -> Unit, onAgenda: () -> Unit, onAssistant: () -> Unit, onPlans: () -> Unit, onToggle: (OrbitTask) -> Unit) {
+    val todayKey = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
+    val todayTasks = tasks.filter { it.dueDate == todayKey }
+    val todayDone = todayTasks.count { it.done }
+    val todayPending = todayTasks.size - todayDone
     val pending = tasks.count { !it.done }
     val completed = tasks.count { it.done }
+    val overdue = tasks.count { !it.done && OrbitTaskTime.isOverdue(it) }
+    val nextTask = OrbitTaskTime.sortByDueDate(tasks.filter { !it.done && it.dueDate >= todayKey }).firstOrNull()
     val today = SimpleDateFormat("EEEE, d 'de' MMMM", Locale("pt", "BR")).format(Date())
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+    val completion = if (todayTasks.isEmpty()) 0f else todayDone.toFloat() / todayTasks.size
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         item {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Button(onClick = onPlans, colors = ButtonDefaults.buttonColors(containerColor = OrbitBlue), shape = RoundedCornerShape(12.dp)) {
+                    Icon(Icons.Default.WorkspacePremium, null, modifier = Modifier.size(17.dp))
+                    Spacer(Modifier.width(7.dp)); Text("Assinaturas")
+                }
+            }
             Text(today.replaceFirstChar { it.uppercase() }, color = OrbitMuted, fontSize = 12.sp)
             Spacer(Modifier.height(5.dp))
             Text("Seu mundo, em ordem.", color = OrbitText, fontSize = 27.sp, fontWeight = FontWeight.Bold)
-            Text("Tudo o que importa, em um só lugar.", color = OrbitMuted, fontSize = 14.sp)
+            Text("Seu painel diário de organização.", color = OrbitMuted, fontSize = 14.sp)
         }
         item {
-            Card(shape = RoundedCornerShape(26.dp), colors = CardDefaults.cardColors(containerColor = OrbitPanel2)) {
-                Box(Modifier.fillMaxWidth()) {
-                    Box(Modifier.align(Alignment.TopEnd).size(145.dp).background(OrbitBlue.copy(alpha = .12f), CircleShape))
-                    Column(Modifier.padding(20.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Surface(color = OrbitBlue.copy(alpha = .22f), shape = RoundedCornerShape(50.dp)) {
-                                Text("PAINEL DE CONTROLE", color = OrbitCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 11.dp, vertical = 7.dp))
-                            }
-                            Spacer(Modifier.weight(1f)); Icon(Icons.Default.AutoAwesome, null, tint = OrbitCyan)
-                        }
-                        Spacer(Modifier.height(18.dp))
-                        Text("$pending", color = OrbitText, fontSize = 42.sp, fontWeight = FontWeight.ExtraBold)
-                        Text("tarefas pendentes", color = OrbitMuted, fontSize = 14.sp)
-                        Spacer(Modifier.height(17.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
-                            MiniMetric("$completed concluídas", OrbitGreen)
-                            MiniMetric("$documentCount arquivos", OrbitCyan)
-                        }
-                        Spacer(Modifier.height(18.dp))
-                        Button(onClick = onTasks, colors = ButtonDefaults.buttonColors(containerColor = OrbitBlue), shape = RoundedCornerShape(12.dp)) {
-                            Text("Organizar meu dia"); Spacer(Modifier.width(8.dp)); Icon(Icons.Default.ArrowForward, null, modifier = Modifier.size(16.dp))
-                        }
+            Card(shape = RoundedCornerShape(24.dp), colors = CardDefaults.cardColors(containerColor = OrbitPanel2)) {
+                Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("AGENDAMENTOS DE HOJE", color = OrbitCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        Spacer(Modifier.weight(1f))
+                        Text("${todayDone}/${todayTasks.size}", color = OrbitText, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold)
+                    }
+                    LinearProgressIndicator(progress = completion, modifier = Modifier.fillMaxWidth().height(7.dp), color = OrbitCyan, trackColor = OrbitBg)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        MiniMetric("$todayPending pendentes", OrbitCyan)
+                        MiniMetric("$todayDone concluídos", OrbitGreen)
+                    }
+                    Text(if (todayTasks.isEmpty()) "Você ainda não tem compromissos para hoje." else "Você concluiu $todayDone de ${todayTasks.size} agendamento(s) de hoje.", color = OrbitMuted, fontSize = 12.sp)
+                }
+            }
+        }
+        item {
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                DashboardStat("Pendentes", pending.toString(), Icons.Default.PendingActions, Modifier.weight(1f))
+                DashboardStat("Atrasados", overdue.toString(), Icons.Default.WarningAmber, Modifier.weight(1f))
+                DashboardStat("Concluídos", completed.toString(), Icons.Default.TaskAlt, Modifier.weight(1f))
+            }
+        }
+        if (activeTier == OrbitPlanTier.MAX) item {
+            Card(colors = CardDefaults.cardColors(containerColor = OrbitPanel), shape = RoundedCornerShape(20.dp)) {
+                Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.AutoAwesome, null, tint = OrbitCyan)
+                        Spacer(Modifier.width(8.dp))
+                        Text("ORBIT MAX • CENTRAL INTELIGENTE", color = OrbitCyan, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+                    Text(
+                        when {
+                            overdue > 0 -> "Você tem $overdue compromisso(s) atrasado(s). Priorize a revisão deles."
+                            todayPending > 0 -> "Você tem $todayPending compromisso(s) para concluir hoje. Mantenha o foco."
+                            todayTasks.isEmpty() -> "Sua agenda de hoje está livre. Aproveite para planejar os próximos dias."
+                            else -> "Ótimo ritmo: seus compromissos de hoje estão concluídos."
+                        },
+                        color = OrbitText, fontSize = 13.sp
+                    )
+                    Text("Use o Assistente MAX para organizar novos compromissos e conferir conflitos.", color = OrbitMuted, fontSize = 11.sp)
+                    Button(onClick = onAssistant, colors = ButtonDefaults.buttonColors(containerColor = OrbitBlue)) {
+                        Icon(Icons.Default.AutoAwesome, null, modifier = Modifier.size(16.dp)); Spacer(Modifier.width(7.dp)); Text("Abrir assistente MAX")
+                    }
+                }
+            }
+        }
+        if (activeTier == OrbitPlanTier.MAX) item { OrbitProgressPanel(tasks) }
+        item {
+            Card(colors = CardDefaults.cardColors(containerColor = OrbitPanel), shape = RoundedCornerShape(18.dp)) {
+                Column(Modifier.fillMaxWidth().padding(15.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                    Text("PRÓXIMO COMPROMISSO", color = OrbitCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    if (nextTask == null) {
+                        Text("Nenhum compromisso futuro pendente.", color = OrbitText, fontSize = 13.sp)
+                    } else {
+                        Text(nextTask.title, color = OrbitText, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                        Text("${OrbitTaskTime.displayDate(nextTask.dueDate)} • ${nextTask.reminderTime}", color = OrbitMuted, fontSize = 12.sp)
                     }
                 }
             }
@@ -325,8 +436,8 @@ private fun HomeScreen(tasks: List<OrbitTask>, documentCount: Int, onTasks: () -
         item { SectionHeader("Acesso rápido", "Atalhos para sua rotina") }
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                ShortcutCard("Assistente", "Transforme informações em ações", Icons.Default.AutoAwesome, Modifier.weight(1f), onAssistant)
-                ShortcutCard("Agenda", "Veja seus compromissos", Icons.Default.CalendarMonth, Modifier.weight(1f), onAgenda)
+                ShortcutCard("Assistente", if (activeTier == OrbitPlanTier.MAX) "Planejamento com IA" else "Recurso do MAX", Icons.Default.AutoAwesome, Modifier.weight(1f), onAssistant)
+                ShortcutCard("Agenda", "Calendário mensal", Icons.Default.CalendarMonth, Modifier.weight(1f), onAgenda)
             }
         }
         item {
@@ -336,13 +447,119 @@ private fun HomeScreen(tasks: List<OrbitTask>, documentCount: Int, onTasks: () -
             }
         }
         if (tasks.none { !it.done }) item { EmptyState("Tudo tranquilo por aqui", "Adicione uma tarefa pelo botão + para começar.", Icons.Default.CheckCircle) }
-        else items(
-            tasks.filter { !it.done }
-                .sortedWith(compareBy<OrbitTask>({ if (it.dueDate.isBlank()) "9999-99-99" else it.dueDate }, { it.reminderTime }))
-                .take(4),
-            key = { it.id }
-        ) { TaskRow(it, onToggle, null) }
+        else items(OrbitTaskTime.sortByDueDate(tasks.filter { !it.done }).take(4), key = { it.id }) { TaskRow(it, onToggle, null) }
+        item {
+            Text("$documentCount arquivo(s) guardado(s)", color = OrbitMuted, fontSize = 11.sp)
+        }
     }
+}
+
+@Composable
+private fun DashboardStat(label: String, value: String, icon: androidx.compose.ui.graphics.vector.ImageVector, modifier: Modifier = Modifier) {
+    Card(modifier = modifier, colors = CardDefaults.cardColors(containerColor = OrbitPanel), shape = RoundedCornerShape(16.dp)) {
+        Column(Modifier.fillMaxWidth().padding(11.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+            Icon(icon, null, tint = OrbitCyan, modifier = Modifier.size(18.dp))
+            Text(value, color = OrbitText, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold)
+            Text(label, color = OrbitMuted, fontSize = 10.sp, maxLines = 1)
+        }
+    }
+}
+
+@Composable
+private fun OrbitProgressPanel(tasks: List<OrbitTask>) {
+    val today = orbitPeriodProgress(tasks, "today")
+    val week = orbitPeriodProgress(tasks, "week")
+    val month = orbitPeriodProgress(tasks, "month")
+    val year = orbitPeriodProgress(tasks, "year")
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = OrbitPanel),
+        shape = RoundedCornerShape(22.dp)
+    ) {
+        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.Insights, null, tint = OrbitCyan, modifier = Modifier.size(22.dp))
+                Spacer(Modifier.width(9.dp))
+                Column {
+                    Text("PROGRESSO DOS AGENDAMENTOS", color = OrbitText, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    Text("Concluídos / total • acompanhe sua rotina", color = OrbitMuted, fontSize = 10.sp)
+                }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+                OrbitProgressMetric("Hoje", today, Modifier.weight(1f))
+                OrbitProgressMetric("Semana", week, Modifier.weight(1f))
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+                OrbitProgressMetric("Mês", month, Modifier.weight(1f))
+                OrbitProgressMetric("Ano", year, Modifier.weight(1f))
+            }
+        }
+    }
+}
+
+@Composable
+private fun OrbitProgressMetric(label: String, progress: Pair<Int, Int>, modifier: Modifier = Modifier) {
+    val completed = progress.first
+    val total = progress.second
+    val remaining = (total - completed).coerceAtLeast(0)
+    val progress = if (total == 0) 0f else (completed.toFloat() / total).coerceIn(0f, 1f)
+    Column(
+        modifier = modifier
+            .background(OrbitPanel2, RoundedCornerShape(15.dp))
+            .padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(7.dp)
+    ) {
+        Text(label, color = OrbitMuted, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+        Text("$completed/$total", color = OrbitText, fontSize = 23.sp, fontWeight = FontWeight.ExtraBold)
+        LinearProgressIndicator(
+            progress = progress,
+            modifier = Modifier.fillMaxWidth().height(6.dp),
+            color = OrbitCyan,
+            trackColor = OrbitBg
+        )
+        Text("$remaining restantes", color = OrbitCyan, fontSize = 10.sp)
+    }
+}
+
+private fun orbitPeriodProgress(tasks: List<OrbitTask>, period: String): Pair<Int, Int> {
+    val now = Calendar.getInstance()
+    val start = (now.clone() as Calendar).apply {
+        set(Calendar.HOUR_OF_DAY, 0)
+        set(Calendar.MINUTE, 0)
+        set(Calendar.SECOND, 0)
+        set(Calendar.MILLISECOND, 0)
+        when (period) {
+            "week" -> {
+                val firstDay = firstDayOfWeek
+                val offset = (get(Calendar.DAY_OF_WEEK) - firstDay + 7) % 7
+                add(Calendar.DAY_OF_MONTH, -offset)
+            }
+            "month" -> set(Calendar.DAY_OF_MONTH, 1)
+            "year" -> set(Calendar.DAY_OF_YEAR, 1)
+        }
+    }
+    val end = (start.clone() as Calendar).apply {
+        when (period) {
+            "today" -> add(Calendar.DAY_OF_MONTH, 1)
+            "week" -> add(Calendar.DAY_OF_MONTH, 7)
+            "month" -> add(Calendar.MONTH, 1)
+            "year" -> add(Calendar.YEAR, 1)
+        }
+    }
+    val formatter = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply { isLenient = false }
+    val periodTasks = tasks.filter { task ->
+        if (task.dueDate.isBlank()) false
+        else try {
+            val position = java.text.ParsePosition(0)
+            val parsed = formatter.parse(task.dueDate, position)
+            parsed != null && position.index == task.dueDate.length &&
+                parsed.time >= start.timeInMillis && parsed.time < end.timeInMillis
+        } catch (_: Exception) {
+            false
+        }
+    }
+    return periodTasks.count { it.done } to periodTasks.size
 }
 
 @Composable
@@ -362,20 +579,80 @@ private fun TasksScreen(tasks: List<OrbitTask>, onToggle: (OrbitTask) -> Unit, o
 
 @Composable
 private fun AgendaScreen(tasks: List<OrbitTask>) {
-    val dated = tasks.filter { it.dueDate.isNotBlank() }.sortedBy { it.dueDate }
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        item { Text("Sua agenda", color = OrbitText, fontSize = 27.sp, fontWeight = FontWeight.Bold); Text("Datas importantes ligadas às suas tarefas.", color = OrbitMuted, fontSize = 13.sp) }
+    var monthOffset by remember { mutableIntStateOf(0) }
+    var selectedDate by remember { mutableStateOf(SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())) }
+    val monthCalendar = Calendar.getInstance().apply {
+        set(Calendar.DAY_OF_MONTH, 1)
+        add(Calendar.MONTH, monthOffset)
+    }
+    val monthLabel = SimpleDateFormat("MMMM 'de' yyyy", Locale("pt", "BR")).format(monthCalendar.time)
+        .replaceFirstChar { it.uppercase() }
+    val firstWeekday = (monthCalendar.get(Calendar.DAY_OF_WEEK) - monthCalendar.firstDayOfWeek + 7) % 7
+    val daysInMonth = monthCalendar.getActualMaximum(Calendar.DAY_OF_MONTH)
+    val dayTasks = OrbitTaskTime.sortByDueDate(tasks.filter { it.dueDate == selectedDate })
+    val todayKey = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        item {
+            Text("Sua agenda", color = OrbitText, fontSize = 27.sp, fontWeight = FontWeight.Bold)
+            Text("Calendário mensal e compromissos por dia.", color = OrbitMuted, fontSize = 13.sp)
+        }
         item {
             Card(colors = CardDefaults.cardColors(containerColor = OrbitPanel2), shape = RoundedCornerShape(20.dp)) {
-                Row(Modifier.fillMaxWidth().padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.CalendarMonth, null, tint = OrbitCyan, modifier = Modifier.size(34.dp)); Spacer(Modifier.width(14.dp))
-                    Column { Text(SimpleDateFormat("d 'de' MMMM", Locale("pt", "BR")).format(Date()), color = OrbitText, fontWeight = FontWeight.Bold, fontSize = 18.sp); Text("Hoje", color = OrbitMuted, fontSize = 12.sp) }
+                Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(onClick = { monthOffset-- }) { Icon(Icons.Default.ChevronLeft, "Mês anterior", tint = OrbitCyan) }
+                        Text(monthLabel, color = OrbitText, fontSize = 17.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                        IconButton(onClick = { monthOffset++ }) { Icon(Icons.Default.ChevronRight, "Próximo mês", tint = OrbitCyan) }
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                        listOf("D", "S", "T", "Q", "Q", "S", "S").forEach { day ->
+                            Text(day, color = OrbitMuted, fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                        }
+                    }
+                    val totalCells = ((firstWeekday + daysInMonth + 6) / 7) * 7
+                    for (weekStart in 0 until totalCells step 7) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                            for (cell in weekStart until weekStart + 7) {
+                                val dayNumber = cell - firstWeekday + 1
+                                if (dayNumber in 1..daysInMonth) {
+                                    val dayCalendar = (monthCalendar.clone() as Calendar).apply { set(Calendar.DAY_OF_MONTH, dayNumber) }
+                                    val dateKey = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(dayCalendar.time)
+                                    val count = tasks.count { it.dueDate == dateKey }
+                                    val selected = selectedDate == dateKey
+                                    val isToday = todayKey == dateKey
+                                    Surface(
+                                        onClick = { selectedDate = dateKey },
+                                        modifier = Modifier.weight(1f).height(48.dp),
+                                        color = if (selected) OrbitBlue else if (isToday) OrbitBlue.copy(alpha = .22f) else Color.Transparent,
+                                        shape = RoundedCornerShape(10.dp),
+                                        border = if (isToday && !selected) androidx.compose.foundation.BorderStroke(1.dp, OrbitCyan) else null
+                                    ) {
+                                        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                                            Text(dayNumber.toString(), color = if (selected) Color.White else OrbitText, fontSize = 13.sp, fontWeight = if (selected || isToday) FontWeight.Bold else FontWeight.Normal)
+                                            if (count > 0) Text("• $count", color = if (selected) Color.White else OrbitCyan, fontSize = 9.sp)
+                                        }
+                                    }
+                                } else {
+                                    Spacer(Modifier.weight(1f).height(48.dp))
+                                }
+                            }
+                        }
+                    }
+                    Text("Toque em um dia para ver os compromissos. Os pontos indicam dias com agendamentos.", color = OrbitMuted, fontSize = 10.sp)
                 }
             }
         }
-        item { SectionHeader("Datas das tarefas", "${dated.size} com data definida") }
-        if (dated.isEmpty()) item { EmptyState("Agenda livre", "Ao criar uma tarefa, informe a data no formato AAAA-MM-DD para vê-la aqui.", Icons.Default.EventAvailable) }
-        items(dated, key = { it.id }) { TaskRow(it, {}, null, false) }
+        item {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(OrbitTaskTime.displayDate(selectedDate), color = OrbitText, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                    Text("Compromissos do dia selecionado", color = OrbitMuted, fontSize = 11.sp)
+                }
+                Text("${dayTasks.size} item(ns)", color = OrbitCyan, fontSize = 11.sp)
+            }
+        }
+        if (dayTasks.isEmpty()) item { EmptyState("Nenhum compromisso neste dia", "Escolha outra data ou adicione um novo agendamento.", Icons.Default.EventAvailable) }
+        items(dayTasks, key = { it.id }) { TaskRow(it, {}, null, false) }
     }
 }
 
@@ -429,15 +706,14 @@ private fun FilesScreen(documents: List<OrbitDocument>, onAdd: () -> Unit, onDel
 
 @Composable
 private fun TaskRow(task: OrbitTask, onToggle: (OrbitTask) -> Unit, onDelete: ((OrbitTask) -> Unit)?, showToggle: Boolean = true, onEdit: ((OrbitTask) -> Unit)? = null) {
-    val todayIso = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
-    val overdue = !task.done && task.dueDate.isNotBlank() && task.dueDate.length == 10 && task.dueDate < todayIso
+    val overdue = OrbitTaskTime.isOverdue(task)
     Card(colors = CardDefaults.cardColors(containerColor = OrbitPanel), shape = RoundedCornerShape(16.dp)) {
         Row(Modifier.fillMaxWidth().padding(start = 12.dp, end = 6.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             if (showToggle) Checkbox(task.done, { onToggle(task) }, colors = CheckboxDefaults.colors(checkedColor = OrbitGreen, uncheckedColor = OrbitMuted))
             else Icon(Icons.Default.Event, null, tint = OrbitCyan, modifier = Modifier.padding(horizontal = 12.dp))
             Column(Modifier.weight(1f).padding(vertical = 7.dp)) {
                 Text(task.title, color = if (task.done) OrbitMuted else OrbitText, fontWeight = FontWeight.SemiBold)
-                if (task.dueDate.isNotBlank()) Text("Data: ${task.dueDate} • ${task.reminderTime}" + if (task.reminderLeadMinutes > 0) " • aviso ${task.reminderLeadMinutes} min antes" else " • aviso no horário", color = OrbitMuted, fontSize = 11.sp)
+                if (task.dueDate.isNotBlank()) Text("Data: ${OrbitTaskTime.displayDate(task.dueDate)} • ${task.reminderTime}" + if (task.reminderLeadMinutes > 0) " • aviso ${task.reminderLeadMinutes} min antes" else " • aviso no horário", color = OrbitMuted, fontSize = 11.sp)
                 if (overdue) Text("Atrasada — precisa de atenção", color = Color(0xFFFF8A80), fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
             }
             if (onEdit != null) IconButton(onClick = { onEdit(task) }) { Icon(Icons.Default.Edit, "Editar tarefa", tint = OrbitCyan) }
@@ -553,32 +829,27 @@ private fun AssistantDialog(
         mutableStateOf("Olá! Escreva um compromisso com data e horário. Eu identifico as informações e programo o lembrete.")
     }
     var proposedSchedule by remember { mutableStateOf<OrbitScheduleDraft?>(null) }
+    val conversation = remember { OrbitScheduleConversation() }
 
     fun processPrompt() {
         val question = prompt.trim()
         if (question.isBlank()) return
 
-        proposedSchedule = null
-        val draft = OrbitCommandParser.parseSchedule(question)
-        if (draft != null) {
-            proposedSchedule = draft
+        val result = conversation.submit(question)
+        proposedSchedule = result.draft
+        answer = if (result.draft != null) {
+            val draft = result.draft
             val reminderDescription = if (draft.reminderLeadMinutes > 0) {
                 "aviso " + draft.reminderLeadMinutes + " minutos antes"
             } else {
                 "aviso no horário do compromisso"
             }
-            answer = "Entendi o compromisso:\n• " + draft.title +
+            "Entendi o compromisso:\n• " + draft.title +
                 "\n• " + draft.date + " às " + draft.time +
                 "\n• " + reminderDescription +
                 "\n\nConfira e confirme para salvar."
-            prompt = ""
-        } else if (OrbitCommandParser.hasSchedulingIntent(question) && !OrbitCommandParser.hasExplicitTime(question)) {
-            answer = "por favor defina o horário do lembrete"
-        } else if (OrbitCommandParser.hasSchedulingIntent(question)) {
-            answer = "Não consegui identificar a data do compromisso. Informe a data e tente novamente."
-        } else {
-            answer = "Eu cuido somente dos seus compromissos e lembretes. Escreva o que deseja lembrar, incluindo a data e o horário."
-        }
+        } else result.message
+        prompt = ""
     }
 
     AlertDialog(
@@ -684,37 +955,24 @@ private fun EmptyState(title: String, subtitle: String, icon: androidx.compose.u
 
 
 private fun scheduleOrbitReminder(context: Context, task: OrbitTask, voiceEnabled: Boolean = true) {
-    // Always replace/cancel the previous request first. This prevents reminders
-    // from firing after a task is completed, cleared, or edited to an invalid date.
     cancelOrbitReminder(context, task.id)
     if (task.dueDate.isBlank() || task.done) return
-    val parser = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply { isLenient = false }
-    val position = java.text.ParsePosition(0)
-    val parsed = try { parser.parse(task.dueDate, position) } catch (_: Exception) { null }
-    if (parsed == null || position.index != task.dueDate.length) return
-    val now = Calendar.getInstance()
-    val timeParts = task.reminderTime.split(":")
-    if (timeParts.size != 2) return
-    val hour = timeParts[0].toIntOrNull() ?: return
-    val minute = timeParts[1].toIntOrNull() ?: return
-    if (hour !in 0..23 || minute !in 0..59) return
-    val due = Calendar.getInstance().apply {
-        time = parsed
-        set(Calendar.HOUR_OF_DAY, hour); set(Calendar.MINUTE, minute)
-        set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
-    }
-    val today = now.get(Calendar.YEAR) == due.get(Calendar.YEAR) &&
-        now.get(Calendar.DAY_OF_YEAR) == due.get(Calendar.DAY_OF_YEAR)
-    if (due.before(now)) return
-    due.add(Calendar.MINUTE, -task.reminderLeadMinutes.coerceIn(0, 1440))
-    // If the event is still in the future but its lead-time reminder has
-    // already passed, notify immediately instead of silently dropping it.
+    val dueMillis = orbitLocalDateTimeMillis(task.dueDate, task.reminderTime) ?: return
+    val nowMillis = System.currentTimeMillis()
+    if (dueMillis <= nowMillis) return
+
+    val leadMinutes = task.reminderLeadMinutes.coerceIn(0, 1440)
+    val requestedReminderMillis = dueMillis - TimeUnit.MINUTES.toMillis(leadMinutes.toLong())
+    val leadAlreadyPassed = leadMinutes > 0 && requestedReminderMillis <= nowMillis
+    val triggerMillis = if (leadAlreadyPassed) nowMillis else requestedReminderMillis
+
     val request = OneTimeWorkRequestBuilder<OrbitReminderWorker>()
-        .setInitialDelay((due.timeInMillis - now.timeInMillis).coerceAtLeast(0L), TimeUnit.MILLISECONDS)
+        .setInitialDelay((triggerMillis - nowMillis).coerceAtLeast(0L), TimeUnit.MILLISECONDS)
         .setInputData(androidx.work.Data.Builder()
             .putString(OrbitReminderWorker.KEY_TITLE, task.title)
             .putLong(OrbitReminderWorker.KEY_TASK_ID, task.id)
-            .putInt(OrbitReminderWorker.KEY_LEAD_MINUTES, task.reminderLeadMinutes)
+            .putInt(OrbitReminderWorker.KEY_LEAD_MINUTES, leadMinutes)
+            .putBoolean(OrbitReminderWorker.KEY_LEAD_ALREADY_PASSED, leadAlreadyPassed)
             .putBoolean(OrbitReminderWorker.KEY_VOICE_ENABLED, voiceEnabled)
             .build()).build()
     WorkManager.getInstance(context).enqueueUniqueWork(
@@ -723,6 +981,53 @@ private fun scheduleOrbitReminder(context: Context, task: OrbitTask, voiceEnable
 }
 private fun cancelOrbitReminder(context: Context, taskId: Long) {
     WorkManager.getInstance(context).cancelUniqueWork("orbit_task_reminder_${taskId}")
+}
+
+private data class OrbitNotificationEntry(val id: Long, val title: String, val kind: String, val timestamp: Long)
+
+private fun loadOrbitNotificationHistory(context: Context): List<OrbitNotificationEntry> = try {
+    val array = JSONArray(context.getSharedPreferences("orbit_data", Context.MODE_PRIVATE).getString("notification_history", "[]"))
+    (0 until array.length()).map { index ->
+        val item = array.getJSONObject(index)
+        OrbitNotificationEntry(item.optLong("id"), item.optString("title"), item.optString("kind"), item.optLong("timestamp"))
+    }.sortedByDescending { it.timestamp }
+} catch (_: Exception) { emptyList() }
+
+@Composable
+private fun NotificationHistoryScreen(entries: List<OrbitNotificationEntry>, onClear: () -> Unit, onBack: () -> Unit) {
+    var cleared by remember { mutableStateOf(false) }
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        item {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, "Voltar", tint = OrbitCyan) }
+                Column {
+                    Text("Histórico de notificações", color = OrbitText, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                    Text("Últimos 100 lembretes registrados neste aparelho.", color = OrbitMuted, fontSize = 11.sp)
+                }
+            }
+        }
+        if (entries.isNotEmpty() && !cleared) item {
+            TextButton(onClick = { onClear(); cleared = true }) {
+                Icon(Icons.Default.DeleteOutline, null); Text("Limpar histórico")
+            }
+        }
+        if (entries.isEmpty() || cleared) item {
+            EmptyState("Nenhuma notificação registrada", "Os lembretes enviados aparecerão aqui.", Icons.Default.NotificationsNone)
+        }
+        if (!cleared) items(entries, key = { it.id }) { entry ->
+            Card(colors = CardDefaults.cardColors(containerColor = OrbitPanel), shape = RoundedCornerShape(15.dp)) {
+                Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.NotificationsActive, null, tint = OrbitCyan, modifier = Modifier.size(24.dp))
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(entry.title, color = OrbitText, fontWeight = FontWeight.SemiBold)
+                        Text(entry.kind, color = OrbitCyan, fontSize = 10.sp)
+                        Text(SimpleDateFormat("dd/MM/yyyy • HH:mm", Locale("pt", "BR")).format(Date(entry.timestamp)), color = OrbitMuted, fontSize = 11.sp)
+                    }
+                }
+            }
+        }
+    }
 }
 
 private fun loadTasks(context: Context): List<OrbitTask> = try {

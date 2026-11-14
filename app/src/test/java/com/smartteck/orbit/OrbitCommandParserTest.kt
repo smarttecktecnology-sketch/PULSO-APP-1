@@ -172,4 +172,31 @@ class OrbitCommandParserTest {
         assertEquals("15:30", draft.time)
     }
 
+    @Test
+    fun extractsTimeFromPartialRequestsIncludingAfternoonSuffix() {
+        assertEquals("15:30", OrbitCommandParser.parseExplicitTime("consulta às 3:30 da tarde"))
+        assertEquals("08:00", OrbitCommandParser.parseExplicitTime("prova às 8h"))
+        assertEquals("15:00", OrbitCommandParser.parseExplicitTime("consulta às 3 da tarde"))
+        assertEquals(null, OrbitCommandParser.parseExplicitTime("consulta amanhã"))
+    }
+
+    @Test
+    fun parsedScheduleKeepsOnlyTheAppointmentNameForAfternoonHourPhrases() {
+        val draft = OrbitCommandParser.parseSchedule("consulta amanhã às 3 da tarde")
+        requireNotNull(draft)
+        assertEquals("Consulta", draft.title)
+        assertEquals("15:00", draft.time)
+    }
+
+    @Test
+    fun suggestedTitleRemovesPortugueseDateAndHourPhrases() {
+        assertEquals("Consulta", OrbitCommandParser.suggestTitle("consulta amanhã às 3 da tarde"))
+    }
+
+    @Test
+    fun extractsDateFromPartialRequestsWithoutRequiringTime() {
+        assertTrue(OrbitCommandParser.parseExplicitDate("dentista amanhã") != null)
+        assertEquals(null, OrbitCommandParser.parseExplicitDate("dentista sem data"))
+    }
+
 }

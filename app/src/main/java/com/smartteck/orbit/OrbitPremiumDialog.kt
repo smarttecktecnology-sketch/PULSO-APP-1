@@ -59,10 +59,12 @@ fun OrbitPremiumDialog(
                         modifier = Modifier.padding(horizontal = 11.dp, vertical = 8.dp)
                     )
                 }
-                Text("O plano de maior valor do SMART ORBIT. Libera o assistente de IA avançado e os recursos inteligentes exclusivos.", color = PremiumText, fontSize = 13.sp)
-                PremiumFeature("IA exclusiva: comandos, agenda e organização por conversa")
-                PremiumFeature("Agendamentos e lembretes por linguagem natural")
-                PremiumFeature("Lembretes falados e planejamento inteligente")
+                Text("A experiência mais completa do SMART ORBIT, reunindo lembretes por voz, assistente de IA e acompanhamento avançado da sua rotina.", color = PremiumText, fontSize = 13.sp)
+                PremiumFeature("Criar, editar e cancelar compromissos por conversa")
+                PremiumFeature("Agendamentos por linguagem natural e recorrência")
+                PremiumFeature("Detecção de conflitos de data e horário")
+                PremiumFeature("Painel de progresso: hoje, semana, mês e ano")
+                PremiumFeature("Todos os recursos avançados do ORBIT MAX, incluindo lembretes por voz")
                 Spacer(Modifier.height(2.dp))
                 Text(
                     price?.let { "$it / mês, conforme o plano exibido pelo Google Play" }
@@ -78,9 +80,9 @@ fun OrbitPremiumDialog(
         confirmButton = {
             Button(
                 onClick = onPurchase,
-                enabled = isPremium.not() && productReady && false,
+                enabled = isPremium.not() && productReady,
                 colors = ButtonDefaults.buttonColors(containerColor = PremiumBlue)
-            ) { Icon(Icons.Default.Lock, null); Text("ORBIT MAX em preparação") }
+            ) { Icon(Icons.Default.Lock, null); Text("Assinar ORBIT MAX") }
         },
         dismissButton = {
             Row {

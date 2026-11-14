@@ -54,34 +54,86 @@ object OrbitCommandParser {
         "adicionar na agenda", "colocar na agenda"
     )
 
+    /**
+     * Extracts a clean commitment label from a natural-language request.
+     * Date and time are still selected explicitly in the guided UI.
+     */
+    fun suggestTitle(command: String): String {
+        var title = command.trim()
+        title = title.replace(
+            Regex("(?i)^\\s*(por favor[, ]*)?(agende|agendar|marque|marcar|crie|criar|adicione|adicionar|anote|anotar|lembre|lembrar|me lembre|me lembra|me avise|avise|preciso lembrar de|quero lembrar de)\\s+"),
+            ""
+        )
+        title = title.replace(Regex("(?i)\\b(depois de amanhã|depois de amanha|amanhã|amanha|hoje|segunda(-feira)?|terça(-feira)?|terca(-feira)?|quarta(-feira)?|quinta(-feira)?|sexta(-feira)?|sábado|sabado|domingo)\\b"), "")
+        title = title.replace(Regex("(?i)\\b(?:dia\\s+)?\\d{1,2}\\s+de\\s+(janeiro|fevereiro|marco|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro)(?:\\s+de\\s+\\d{4})?\\b"), "")
+        title = title.replace(Regex("\\b\\d{1,2}/\\d{1,2}(?:/\\d{2,4})?\\b"), "")
+        title = title.replace(Regex("(?i)\\b(?:as?|às?|para\\s+as?|para\\s+às?)\\s*\\d{1,2}(?::\\d{2}|h\\d{0,2}|\\s*horas?)?(?:\\s+da\\s+(?:manha|manhã|tarde|noite))?"), "")
+        title = title.replace(Regex("(?i)\\b\\d{1,2}h\\d{0,2}\\b"), "")
+        title = title.replace(Regex("[,.;:!?]+"), " ").replace(Regex("\\s+"), " ").trim(' ', '-')
+        title = title.replace(Regex("(?i)^e\\s+"), "")
+        return title.ifBlank { command.trim() }.replaceFirstChar { if (it.isLowerCase()) it.titlecase(pt) else it.toString() }
+    }
+
     fun hasSchedulingIntent(command: String): Boolean {
         val normalized = normalize(command)
         return schedulingKeywords.any { normalized.contains(it) }
     }
 
+    private val timeWithUnit = Regex("\\b(?:as?\\s*)?(\\d{1,2})(?::(\\d{2})|h(\\d{2})?|\\s*horas?)\\b")
+    private val hourAfterAs = Regex("\\bas\\s*(\\d{1,2})\\b")
+
     fun hasExplicitTime(command: String): Boolean {
         val normalized = normalize(command)
-        return Regex("\\b(?:as?\\s*)?(\\d{1,2})(?::(\\d{2})|h(\\d{2})?|\\s*horas?)\\b")
-            .containsMatchIn(normalized)
+        return timeWithUnit.containsMatchIn(normalized) || hourAfterAs.containsMatchIn(normalized)
+    }
+
+    fun hasExplicitDate(command: String): Boolean =
+        parseDate(normalize(command)) != null
+
+    /** Extracts a date or time even when the user has supplied only part of a request. */
+    fun parseExplicitDate(command: String): String? = parseDate(normalize(command))
+
+    fun parseExplicitTime(command: String): String? {
+        val normalized = normalize(command)
+        val match = timeWithUnit.find(normalized) ?: hourAfterAs.find(normalized) ?: return null
+        var hour = match.groups[1]?.value?.toIntOrNull() ?: return null
+        val minute = (match.groupValues.getOrNull(2)?.takeIf { it.isNotBlank() }
+            ?: match.groupValues.getOrNull(3)?.takeIf { it.isNotBlank() } ?: "0").toIntOrNull() ?: return null
+        val suffix = normalized.substring(match.range.last + 1).trimStart()
+        when {
+            suffix.startsWith("da noite") || suffix.startsWith("da tarde") -> if (hour in 1..11) hour += 12
+            suffix.startsWith("da manha") && hour == 12 -> hour = 0
+        }
+        if (hour !in 0..23 || minute !in 0..59) return null
+        return "%02d:%02d".format(Locale.US, hour, minute)
     }
 
     fun parseSchedule(command: String): OrbitScheduleDraft? {
         val normalized = normalize(command)
-        if (!hasSchedulingIntent(command)) return null
+        // Também aceita descrições naturais sem verbo de comando, como
+        // "dentista amanhã às 14h" ou "prova sexta às 8h".
+        if (!hasSchedulingIntent(command) &&
+            !(hasExplicitDate(command) && hasExplicitTime(command))) return null
 
         val date = parseDate(normalized) ?: return null
-        val timeMatch = Regex("\\b(?:as?\\s*)?(\\d{1,2})(?::(\\d{2})|h(\\d{2})?|\\s*horas?)\\b")
-            .find(normalized) ?: return null
-        val hour = (timeMatch.groups[1]?.value ?: "").toIntOrNull() ?: return null
-        val minute = (timeMatch.groups[2]?.value ?: timeMatch.groups[3]?.value ?: "0").toIntOrNull() ?: return null
+        val timeMatch = timeWithUnit.find(normalized) ?: hourAfterAs.find(normalized) ?: return null
+        var hour = (timeMatch.groups[1]?.value ?: "").toIntOrNull() ?: return null
+        val minute = (timeMatch.groupValues.getOrNull(2)?.takeIf { it.isNotBlank() }
+            ?: timeMatch.groupValues.getOrNull(3)?.takeIf { it.isNotBlank() } ?: "0").toIntOrNull() ?: return null
+        val timeSuffix = normalized.substring(timeMatch.range.last + 1).trimStart()
+        when {
+            timeSuffix.startsWith("da noite") || timeSuffix.startsWith("da tarde") -> if (hour in 1..11) hour += 12
+            timeSuffix.startsWith("da manha") && hour == 12 -> hour = 0
+        }
         if (hour !in 0..23 || minute !in 0..59) return null
 
+        val minuteLead = Regex("(\\d{1,4})\\s*(minuto|minutos|min)\\s*antes").find(normalized)
+            ?.groupValues?.get(1)?.toIntOrNull()
+        val hourLead = Regex("(\\d{1,2})\\s*horas?\\s*antes").find(normalized)
+            ?.groupValues?.get(1)?.toIntOrNull()
         val lead = when {
-            Regex("30\\s*(minuto|minutos|min)\\s*antes").containsMatchIn(normalized) -> 30
-            Regex("15\\s*(minuto|minutos|min)\\s*antes").containsMatchIn(normalized) -> 15
-            Regex("1\\s*hora\\s*antes").containsMatchIn(normalized) -> 60
-            Regex("(\\d{1,3})\\s*(minuto|minutos|min)\\s*antes").find(normalized)?.groupValues?.get(1) != null ->
-                Regex("(\\d{1,3})\\s*(minuto|minutos|min)\\s*antes").find(normalized)?.groupValues?.get(1)?.toIntOrNull()?.coerceIn(0, 1440) ?: 0
+            minuteLead != null -> minuteLead.coerceIn(0, 1440)
+            hourLead != null -> (hourLead * 60).coerceIn(0, 1440)
             else -> 0
         }
 
@@ -95,9 +147,12 @@ object OrbitCommandParser {
             ""
         )
         title = title.replace(Regex("(?i)\\bdepois\\s+de\\s+amanh[ãa]\\b"), "")
+        title = title.replace(Regex("(?i)\\bdaqui\\s+a\\s+\\d{1,3}\\s+dias?\\b"), "")
+        title = title.replace(Regex("(?i)\\b(?:dia\\s+)?\\d{1,2}\\s+de\\s+(janeiro|fevereiro|marco|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro)(?:\\s+de\\s+\\d{4})?\\b"), "")
+        title = title.replace(Regex("(?i)\\bdia\\s+\\d{1,2}/\\d{1,2}(?:/\\d{2,4})?\\b"), "")
         title = title.replace(Regex("(?i)\\b(hoje|amanh[ãa]|segunda(-feira)?|ter[cç]a(-feira)?|quarta(-feira)?|quinta(-feira)?|sexta(-feira)?|s[áa]bado|domingo)\\b"), "")
         title = title.replace(Regex("\\b\\d{1,2}/\\d{1,2}(/\\d{2,4})?\\b"), "")
-        title = title.replace(Regex("(?i)\\b(?:[àa]s?|para\\s+as?)\\s*\\d{1,2}(?::\\d{2}|h\\d{0,2}|\\s*horas?)\\b"), "")
+        title = title.replace(Regex("(?i)\\b(?:[àa]s?|às?|para\\s+as?|para\\s+às?)\\s*\\d{1,2}(?::\\d{2}|h\\d{0,2}|\\s*horas?)?(?:\\s+da\\s+(?:manha|manhã|tarde|noite))?"), "")
         title = title.replace(Regex("(?i)\\b\\d{1,2}h\\d{0,2}\\b"), "")
         title = title.replace(Regex("(?i)(e\\s+)?(me\\s+)?(lembre|lembrar|lembra|avise|avisar|notifique|notificar)[^,.;]*"), "")
         title = title.replace(Regex("(?i)\\b(com\\s+)?(aviso|lembrete)\\s+\\d{1,3}\\s*(minutos?|mins?)\\s+antes\\b"), "")
@@ -105,6 +160,18 @@ object OrbitCommandParser {
         title = title.replace(Regex("[,.;:!?]+"), " ").replace(Regex("\\s+"), " ").trim()
         title = title.trim('-', ' ')
         if (title.isBlank()) title = "Compromisso"
+        val dueDate = try {
+            SimpleDateFormat("yyyy-MM-dd", Locale.US).apply { isLenient = false }.parse(date)
+        } catch (_: Exception) { null } ?: return null
+        val due = Calendar.getInstance().apply {
+            time = dueDate
+            set(Calendar.HOUR_OF_DAY, hour)
+            set(Calendar.MINUTE, minute)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+        if (!due.after(Calendar.getInstance())) return null
+
         return OrbitScheduleDraft(title.replaceFirstChar { if (it.isLowerCase()) it.titlecase(pt) else it.toString() },
             date, "%02d:%02d".format(Locale.US, hour, minute), lead)
     }
@@ -113,9 +180,36 @@ object OrbitCommandParser {
         val cal = Calendar.getInstance()
         when {
             normalized.contains("depois de amanha") -> cal.add(Calendar.DAY_OF_YEAR, 2)
+            Regex("\\bdaqui a (\\d{1,3}) dias?\\b").find(normalized) != null -> {
+                val days = Regex("\\bdaqui a (\\d{1,3}) dias?\\b").find(normalized)?.groupValues?.get(1)?.toIntOrNull() ?: return null
+                if (days !in 1..365) return null
+                cal.add(Calendar.DAY_OF_YEAR, days)
+            }
             Regex("\\bamanha\\b").containsMatchIn(normalized) -> cal.add(Calendar.DAY_OF_YEAR, 1)
             Regex("\\bhoje\\b").containsMatchIn(normalized) -> Unit
             else -> {
+                val monthNames = mapOf(
+                    "janeiro" to Calendar.JANUARY, "fevereiro" to Calendar.FEBRUARY,
+                    "marco" to Calendar.MARCH, "abril" to Calendar.APRIL,
+                    "maio" to Calendar.MAY, "junho" to Calendar.JUNE,
+                    "julho" to Calendar.JULY, "agosto" to Calendar.AUGUST,
+                    "setembro" to Calendar.SEPTEMBER, "outubro" to Calendar.OCTOBER,
+                    "novembro" to Calendar.NOVEMBER, "dezembro" to Calendar.DECEMBER
+                )
+                val namedDate = Regex("\\b(?:dia\\s+)?(\\d{1,2})\\s+de\\s+(janeiro|fevereiro|marco|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro)(?:\\s+de\\s+(\\d{4}))?\\b").find(normalized)
+                if (namedDate != null) {
+                    val day = namedDate.groupValues[1].toIntOrNull() ?: return null
+                    val month = monthNames[namedDate.groupValues[2]] ?: return null
+                    val year = namedDate.groupValues[3].toIntOrNull() ?: cal.get(Calendar.YEAR)
+                    cal.setLenient(false)
+                    try {
+                        cal.set(year, month, day, 0, 0, 0)
+                        cal.set(Calendar.MILLISECOND, 0)
+                        cal.time
+                    } catch (_: Exception) { return null }
+                    if (namedDate.groupValues[3].isBlank() && cal.timeInMillis < System.currentTimeMillis()) cal.add(Calendar.YEAR, 1)
+                    return SimpleDateFormat("yyyy-MM-dd", Locale.US).format(cal.time)
+                }
                 val weekdays = listOf(
                     "domingo" to Calendar.SUNDAY,
                     "segunda" to Calendar.MONDAY, "segunda feira" to Calendar.MONDAY,
