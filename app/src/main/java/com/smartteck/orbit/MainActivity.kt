@@ -255,7 +255,7 @@ private fun OrbitApp() {
                         documents = documents.filterNot { doc -> doc.uri == it.uri }; saveDocuments(context, documents)
                     })
                     OrbitPage.PLANS -> OrbitPlansScreen(
-                        effectiveTier, plusPrice, maxPrice, plusReady, maxReady, premiumStatus,
+                        effectiveTier, maxPrice, maxReady, premiumStatus,
                         onSubscribe = { tier ->
                             val activity = context as? Activity
                             if (activity != null) billingManager?.launchPurchase(activity, tier)
