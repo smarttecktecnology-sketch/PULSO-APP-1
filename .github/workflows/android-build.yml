@@ -48,40 +48,21 @@ jobs:
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -memory 2048
           script: |
-            set -euo pipefail
+            set -e
             adb wait-for-device
-
-            # Execute the existing ActivityScenario instrumentation test in both editions.
             gradle --no-daemon :app:connectedTrialDebugAndroidTest :app:connectedOfficialDebugAndroidTest
 
-            launch_and_check() {
-              package="$1"
-              component="$package/com.smartteck.orbit.MainActivity"
-              adb shell am force-stop "$package" || true
-              if ! output="$(adb shell am start -W -n "$component" 2>&1)"; then
-                echo "Failed to start $component"
-                echo "$output"
-                adb logcat -d -t 500
-                return 1
-              fi
-              echo "$output"
-              if ! echo "$output" | grep -Fq "Status: ok"; then
-                echo "Launcher did not report Status: ok for $package"
-                adb logcat -d -t 500
-                return 1
-              fi
-              if ! adb shell pidof "$package"; then
-                echo "Process did not remain alive for $package"
-                adb logcat -d -t 500
-                return 1
-              fi
-            }
-
             adb install -r app/build/outputs/apk/trial/debug/app-trial-debug.apk
-            launch_and_check com.smartteck.orbit.trial
+            trial_output="$(adb shell am start -W -n com.smartteck.orbit.trial/com.smartteck.orbit.MainActivity 2>&1)"
+            echo "$trial_output"
+            echo "$trial_output" | grep -F "Status: ok"
+            adb shell pidof com.smartteck.orbit.trial
 
             adb install -r app/build/outputs/apk/official/debug/app-official-debug.apk
-            launch_and_check com.smartteck.orbit
+            official_output="$(adb shell am start -W -n com.smartteck.orbit/com.smartteck.orbit.MainActivity 2>&1)"
+            echo "$official_output"
+            echo "$official_output" | grep -F "Status: ok"
+            adb shell pidof com.smartteck.orbit
       - name: Report emulator test result
         if: always()
         run: |
