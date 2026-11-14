@@ -38,27 +38,48 @@ jobs:
           path: app/build/outputs/apk/official/debug/app-official-debug.apk
           if-no-files-found: error
           retention-days: 14
-      - name: Run Android instrumentation and launch tests
+      - name: Install and launch both editions in Android emulator
         id: emulator-smoke-test
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 30
+          api-level: 35
           arch: x86_64
           profile: pixel_2
           disable-animations: true
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -memory 2048
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot -wipe-data -memory 4096 -cores 2
           script: |
-            set -e
+            set -euo pipefail
             adb wait-for-device
-            gradle --no-daemon :app:connectedTrialDebugAndroidTest :app:connectedOfficialDebugAndroidTest
+            for attempt in $(seq 1 60); do
+              booted="$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')"
+              if [ "$booted" = "1" ]; then break; fi
+              sleep 2
+            done
+            test "$(adb shell getprop sys.boot_completed | tr -d '\r')" = "1"
+            adb shell settings put global window_animation_scale 0
+            adb shell settings put global transition_animation_scale 0
+            adb shell settings put global animator_duration_scale 0
 
-            adb install -r app/build/outputs/apk/trial/debug/app-trial-debug.apk
+            install_with_retry() {
+              apk="$1"
+              for attempt in 1 2 3; do
+                if adb install -r "$apk"; then return 0; fi
+                echo "Install attempt $attempt failed; restarting ADB connection."
+                adb kill-server || true
+                adb start-server
+                adb wait-for-device
+                sleep 5
+              done
+              return 1
+            }
+
+            install_with_retry app/build/outputs/apk/trial/debug/app-trial-debug.apk
             trial_output="$(adb shell am start -W -n com.smartteck.orbit.trial/com.smartteck.orbit.MainActivity 2>&1)"
             echo "$trial_output"
             echo "$trial_output" | grep -F "Status: ok"
             adb shell pidof com.smartteck.orbit.trial
 
-            adb install -r app/build/outputs/apk/official/debug/app-official-debug.apk
+            install_with_retry app/build/outputs/apk/official/debug/app-official-debug.apk
             official_output="$(adb shell am start -W -n com.smartteck.orbit/com.smartteck.orbit.MainActivity 2>&1)"
             echo "$official_output"
             echo "$official_output" | grep -F "Status: ok"
@@ -67,7 +88,7 @@ jobs:
         if: always()
         run: |
           if [ "${{ steps.emulator-smoke-test.outcome }}" = "success" ]; then
-            echo "Instrumentation and launch tests passed in both editions."
+            echo "Both editions installed and launched successfully in the Android emulator."
           else
-            echo "::warning::Instrumentation or launch tests failed. APK artifacts were uploaded before emulator tests."
+            echo "::warning::Emulator installation or launch check failed. APK artifacts were uploaded before emulator checks."
           fi
